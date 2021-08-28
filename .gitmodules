@@ -1,0 +1,3 @@
+[submodule "src/DS3232RTC"]
+	path = src/DS3232RTC
+	url = https://github.com/H4K5M6/DS3232RTC.git
