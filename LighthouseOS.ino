@@ -8,8 +8,10 @@
 #include <Adafruit_FRAM_I2C.h> //from lib manager v2.0
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ILI9341.h>// Controller specific library
+#include <CheapStepper.h>
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
+#include "Adresses.h"
 
 //DS3231 pins
 #define DS3231_INT 3
@@ -21,14 +23,14 @@
 //TFT pins
 //use Hardware SPI NANO: SCK=13, MISO=12, MOSI=11 
 #define TFT_DC 9
-#define TFT_CS 10
-#define TFT_LITE 5 //PWM pin
+#define TFT_CS 8
+#define TFT_LITE 10 //PWM pin
 //#define TFT_RESET 
 
 //Button pins
-#define BTN_MID 7
-#define BTN_L A6
-#define BTN_R 4
+#define BTN_MID 5
+#define BTN_L 7
+#define BTN_R 6
 
 //Parameters
 #define BKGND ILI9341_BLACK
@@ -63,6 +65,7 @@ uint16_t w, h;
 
 volatile time_t isrTime;
 volatile bool isrTimeChange;
+bool isrTimeUpdate;
 char timeString[3];
 char dateString[11];
 
@@ -79,11 +82,21 @@ const char *mainMenuEntries[MMEL] = {"Volume", "Alarm", "Brightness", "Homing", 
 //menu variables
 int8_t selectedItem = 0;
 int8_t currentMenu = -1;
-uint16_t sleepDelay = 65000;
+uint16_t sleepDelay = 15000;
 unsigned long sleepTimer = 0;
+bool updateScreen = false;
+bool changeValue = false;
 
 //display variable
 uint8_t brightness = 0;
+
+//alarms
+struct alarms {
+    uint8_t hh;
+    uint8_t mm;
+    uint8_t dd;
+    bool act;
+} alm1, alm2;
 
 void setup(void) {
     Serial.begin(9600);
@@ -105,7 +118,7 @@ void setup(void) {
     // from main menu
     S2->addTransition(&closeMainMenu,S0);   // to clock
     S2->addTransition(&toSleep,S1);         // to standby
-    S2->addTransition(&changeSelection,S2); // stay and change selection
+    S2->addTransition(&changeMenuSelection,S2); // stay and change selection
     
     // TFT setup
     delay(500);
@@ -149,7 +162,8 @@ void setup(void) {
         Serial.println("I2C FRAM not identified");
 
     // space for variable inits
-
+    readAlarms(ALARM1, alm1);
+    readAlarms(ALARM2, alm2);
     
     /*tft.setFont(&FreeSans12pt7b);
     /*for (int i = 0; i < 100; i = i+11){
@@ -189,49 +203,21 @@ void setup(void) {
 
 void loop()
 {
+    if (isrTimeChange) {
+        updateClock();
+    }
+    if (checkAlarms()) {
+        Serial.println("ALAAAARM!!!");
+    }
     machine.run();
 }
 
 // main clock display
 void stateClockDisplay()
 {
-    if (isrTimeChange) {
-      isrTimeChange = false;
-      isrTime = myRTC.get();
-      myRTC.alarm(ALARM_2);
-      Serial.println("Ja");
-        if (clockHour != hour(isrTime)){
-            clockHour = hour(isrTime);
-            sprintf(timeString,"%02d",clockHour);
-            canvasClock.fillScreen(BKGND);
-            canvasClock.setCursor(0, 50);
-            canvasClock.println(timeString);
-            tft.drawBitmap(31, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
-        }
-        if (clockMinute != minute(isrTime)){
-            clockMinute = minute(isrTime);
-            sprintf(timeString,"%02d",clockMinute);
-            canvasClock.fillScreen(BKGND);
-            canvasClock.setCursor(0, 50);
-            canvasClock.println(timeString);
-            tft.drawBitmap(121, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
-        }
-        /*if (clockSecond != second(isrTime)){
-            clockSecond = second(isrTime);
-            sprintf(timeString,"%02d",clockSecond);
-            canvasClock.fillScreen(ILI9341_BLACK);
-            canvasClock.setCursor(0, 50);
-            canvasClock.println(timeString);
-            tft.drawBitmap(211, 38, canvasClock.getBuffer(), 76, 54, ILI9341_WHITE, ILI9341_RED);
-        }*/
-        if (clockDay != day(isrTime)){
-            clockDay = day(isrTime);
-            sprintf(dateString,"%02d.%02d.%04d", clockDay, month(isrTime), year(isrTime));
-            canvasDate.fillScreen(BKGND);
-            canvasDate.setCursor(0, 34);
-            canvasDate.println(dateString);
-            tft.drawBitmap(44, 138, canvasDate.getBuffer(), 232, 38, TXT, BKGND);
-        }
+    if (isrTimeUpdate) {
+        isrTimeUpdate = false;
+        clockDisplay();
         analogWrite(TFT_LITE, brightness);
     }
 }
@@ -240,11 +226,17 @@ void stateClockDisplay()
 void stateStandby()
 {
     //nothing yet maybe send arduino to sleep
+    if (isrTimeUpdate) {
+        isrTimeUpdate = false;
+        clockDisplay();
+    }
 }
 
 // main menu
 void stateMainMenu()
 {
+    if (updateScreen) {
+        updateScreen = false;
     tft.setCursor(100,40);
     tft.setFont(&FreeSans12pt7b);
     tft.println("Menu");
@@ -257,6 +249,7 @@ void stateMainMenu()
     tft.setCursor(40,220);
     tft.println(mainMenuEntries[(selectedItem+1)%MMEL]);
     analogWrite(TFT_LITE, brightness);
+    }
 }
 
 bool openMainMenu()
@@ -267,6 +260,8 @@ bool openMainMenu()
       analogWrite(TFT_LITE, 0);
       tft.fillScreen(BKGND);
       currentMenu = 0;
+      selectedItem = 0;
+      updateScreen = true;
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
       return true;
@@ -278,6 +273,7 @@ bool toSleep()
 {
     if (millis() > sleepTimer + sleepDelay) {
         analogWrite(TFT_LITE, 0);
+        currentMenu = -1;
         return true;
     }
     return false;
@@ -312,21 +308,18 @@ bool wakeup()
       isrButtonR = false;
       isrButtonL = false;
       sleepTimer = millis();
-      analogWrite(TFT_LITE, 0);
-      tft.fillScreen(BKGND);
-      prepareClock();
       currentMenu = -1;
+      isrTimeUpdate = true;
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-      isrTimeChange = true; // to enable clock display
       return true;
     }
     return false;
 }
 
-void changeSelection()
+void changeMenuSelection()
 {
     int noItems = 0;
     switch (currentMenu) {
@@ -334,16 +327,20 @@ void changeSelection()
     }
     if(isrButtonR){
         isrButtonR = false;
+        analogWrite(TFT_LITE, 0);
         tft.fillScreen(BKGND);
         selectedItem = (selectedItem+1)%noItems;
+        updateScreen = true;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         return true;
     }
     if(isrButtonL){
         isrButtonL = false;
+        analogWrite(TFT_LITE, 0);
         tft.fillScreen(BKGND);
         selectedItem = (selectedItem+noItems-1)%noItems;
+        updateScreen = true;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         return true;
@@ -363,6 +360,51 @@ void prepareClock()
     tft.print(":");
     /*tft.setCursor(195,88);
     tft.print(":");*/
+}
+
+void updateClock()
+{
+    isrTimeChange = false;
+    isrTimeUpdate = true;
+    isrTime = myRTC.get();
+    myRTC.alarm(ALARM_2);
+}
+
+void clockDisplay()
+{
+    
+        if (clockHour != hour(isrTime)){
+            clockHour = hour(isrTime);
+            sprintf(timeString,"%02d",clockHour);
+            canvasClock.fillScreen(BKGND);
+            canvasClock.setCursor(0, 50);
+            canvasClock.println(timeString);
+            tft.drawBitmap(31, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
+        }
+        if (clockMinute != minute(isrTime)){
+            clockMinute = minute(isrTime);
+            sprintf(timeString,"%02d",clockMinute);
+            canvasClock.fillScreen(BKGND);
+            canvasClock.setCursor(0, 50);
+            canvasClock.println(timeString);
+            tft.drawBitmap(121, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
+        }
+        /*if (clockSecond != second(isrTime)){
+            clockSecond = second(isrTime);
+            sprintf(timeString,"%02d",clockSecond);
+            canvasClock.fillScreen(ILI9341_BLACK);
+            canvasClock.setCursor(0, 50);
+            canvasClock.println(timeString);
+            tft.drawBitmap(211, 38, canvasClock.getBuffer(), 76, 54, ILI9341_WHITE, ILI9341_RED);
+        }*/
+        if (clockDay != day(isrTime)){
+            clockDay = day(isrTime);
+            sprintf(dateString,"%02d.%02d.%04d", clockDay, month(isrTime), year(isrTime));
+            canvasDate.fillScreen(BKGND);
+            canvasDate.setCursor(0, 34);
+            canvasDate.println(dateString);
+            tft.drawBitmap(44, 138, canvasDate.getBuffer(), 232, 38, TXT, BKGND);
+        }
 }
 
 // interrupt functions
@@ -390,4 +432,68 @@ void buttonL()
 {
     detachInterrupt(digitalPinToInterrupt(BTN_L));
     isrButtonL = true;
+}
+
+// alarm functions
+
+void setAlarmState ()
+{
+    // make alarm menu screen
+    // hh:dd
+    // Mo Di Mi Do Fr Sa So
+    // w/ some kind of selection for weekday
+}
+
+/*bool setAlarms ()
+{
+    
+    if (isrButtonMID) {
+      isrButtonMID = false;
+      sleepTimer = millis();
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+      return true;
+    }
+    if (changeValue) {
+        switch case
+    } else {
+        
+    }
+    return false;
+}*/
+
+bool checkAlarms () 
+{
+    if (alm1.act && alm1.hh == hour(isrTime) && alm1.mm == minute(isrTime)) {
+        if (alm1.dd & 0b00000001 << (weekday(isrTime)-1)) {
+            return true;
+        }
+        if (alm1.dd & 0b10000000) {
+            alm1.dd = 0;
+            writeAlarms (ALARM1, alm1);
+            return true; //??
+        }
+    }
+    if (alm2.act && alm2.hh == hour(isrTime) && alm2.mm == minute(isrTime)) {
+        if (alm2.dd & 0b00000001 << (weekday(isrTime)-1)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void writeAlarms (uint16_t address, struct alarms alm)
+{
+    fram.write(address, alm.hh);
+    fram.write(address+1, alm.mm);
+    fram.write(address+2, alm.dd);
+    fram.write(address+3, alm.act);
+}
+
+void readAlarms (uint16_t address, struct alarms &alm)
+{
+    alm.hh = fram.read(address);
+    alm.mm = fram.read(address+1);
+    alm.dd = fram.read(address+2);
+    alm.act = fram.read(address+3);
 }
