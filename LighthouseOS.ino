@@ -28,9 +28,15 @@
 //#define TFT_RESET 
 
 //Button pins
-#define BTN_MID 5
+#define BTN_C 5
 #define BTN_L 7
 #define BTN_R 6
+
+//LED pins
+#define LED_BTN_C
+#define LED_BTN_R
+#define LED_BTN_L
+#define LED_MAIN
 
 //Parameters
 #define BKGND ILI9341_BLACK
@@ -72,7 +78,7 @@ char dateString[11];
 uint8_t clockHour, clockMinute, clockSecond, clockDay;
 
 // button flags
-volatile bool isrButtonMID = false;
+volatile bool isrbuttonC = false;
 volatile bool isrButtonL = false;
 volatile bool isrButtonR = false;
 
@@ -193,8 +199,8 @@ void setup(void) {
     tft.fillRect(119,138,1,40,ILI9341_RED);
     tft.fillRect(120,138,1,40,ILI9341_BLACK);*/
     // Buttons interrupt setup
-    pinMode(BTN_MID, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+    pinMode(BTN_C, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
     pinMode(BTN_R, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
     pinMode(BTN_L, INPUT_PULLUP);
@@ -254,8 +260,8 @@ void stateMainMenu()
 
 bool openMainMenu()
 {
-    if (isrButtonMID) {
-      isrButtonMID = false;
+    if (isrbuttonC) {
+      isrbuttonC = false;
       sleepTimer = millis();
       analogWrite(TFT_LITE, 0);
       tft.fillScreen(BKGND);
@@ -263,7 +269,7 @@ bool openMainMenu()
       selectedItem = 0;
       updateScreen = true;
       delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       return true;
     }
     return false;
@@ -281,8 +287,8 @@ bool toSleep()
 
 bool closeMainMenu()
 {
-    if (isrButtonMID) {
-      isrButtonMID = false;
+    if (isrbuttonC) {
+      isrbuttonC = false;
       sleepTimer = millis();
       if (selectedItem == MMEL-1) {
           analogWrite(TFT_LITE, 0);
@@ -291,11 +297,11 @@ bool closeMainMenu()
           currentMenu = -1;
           isrTimeChange = true; // to enable clock display
           delay(50);
-          attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+          attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
           return true;
           }
       delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       return false;
     }
     return false;
@@ -303,15 +309,15 @@ bool closeMainMenu()
 
 bool wakeup()
 {
-    if (isrButtonMID||isrButtonR||isrButtonL) {
-      isrButtonMID = false;
+    if (isrbuttonC||isrButtonR||isrButtonL) {
+      isrbuttonC = false;
       isrButtonR = false;
       isrButtonL = false;
       sleepTimer = millis();
       currentMenu = -1;
       isrTimeUpdate = true;
       delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
       return true;
@@ -416,10 +422,10 @@ void isrChangeTime()
 
 // button interrupt flags
 
-void buttonMID()
+void buttonC()
 {
-    detachInterrupt(digitalPinToInterrupt(BTN_MID));
-    isrButtonMID = true;
+    detachInterrupt(digitalPinToInterrupt(BTN_C));
+    isrbuttonC = true;
 }
 
 void buttonR()
@@ -447,11 +453,11 @@ void setAlarmState ()
 /*bool setAlarms ()
 {
     
-    if (isrButtonMID) {
-      isrButtonMID = false;
+    if (isrbuttonC) {
+      isrbuttonC = false;
       sleepTimer = millis();
       delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_MID), buttonMID, FALLING);
+      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       return true;
     }
     if (changeValue) {
