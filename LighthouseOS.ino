@@ -14,10 +14,10 @@
 #include "Adresses.h"
 
 //DS3231 pins
-#define DS3231_INT 3
+#define DS3231_INT 3      // interrupt
 
 //DCF77 pins
-#define DCF_PIN 2         // Connection pin to DCF 77 device
+#define DCF_PIN 2         // Connection pin to DCF 77 device, interrupt
 #define DCF_EN_PIN 4      // Enable DCF77 module active low
 
 //TFT pins
@@ -28,23 +28,33 @@
 //#define TFT_RESET 
 
 //Button pins
-#define BTN_C 5
-#define BTN_L 7
-#define BTN_R 6
+#define BTN_C 5           //interrupt
+#define BTN_L 7           //interrupt
+#define BTN_R 6           //interrupt
 
 //LED pins
-#define LED_BTN_C
+#define LED_BTN_C 
 #define LED_BTN_R
 #define LED_BTN_L
-#define LED_MAIN
+#define LED_MAIN          //PWM pin
+
+// stepper pins
+#define STEP_IN1
+#define STEP_IN2
+#define STEP_IN3
+#define STEP_IN4
 
 //Parameters
-#define BKGND ILI9341_BLACK
-#define TXT ILI9341_WHITE 
+#define BKGND ILI9341_BLACK // background color
+#define TXT ILI9341_WHITE // text color
 #define MMEL 9    // number of menu entries
 
 #define LITE 200  // standard brightness
 
+#define DCF_INT 6     // interval of dcf sync in hours
+#define DCF_HOUR 5    // hour to start dcf sync
+#define DCF_MIN 0     // minute to start dcf sync
+#define DCF_LEN 30    // length in minutes of dcf sync attempt
 
 
 // initializations
@@ -83,6 +93,8 @@ volatile bool isrTimeChange;
 bool isrTimeUpdate;
 char timeString[3];
 char dateString[11];
+bool dcfSync = false;
+bool dcfSyncSucc = false;
 
 uint8_t clockHour, clockMinute, clockSecond, clockDay;
 
@@ -98,13 +110,13 @@ const char *mainMenuEntries[MMEL] = {"Clock", "Alarm1", "Alarm2", "Sound", "Ligh
 int8_t selectedMMItem = 0;
 int8_t selectedSubMItem = -1;
 int8_t currentMenu = -1;
-uint16_t sleepDelay = 15000;
-unsigned long sleepTimer = 0;
+uint32_t sleepDelay = 60000;
+uint32_t sleepTimer = 0;
 bool updateScreen = false;
 bool changeValue = false;
 
 //display variable
-uint8_t brightness = 0;
+uint8_t brightness = LITE;
 
 //alarms
 struct alarms {
@@ -112,6 +124,8 @@ struct alarms {
     uint8_t mm;
     uint8_t dd;
     bool act;
+    bool light;
+    uint8_t soundfile;
 } alm1, alm2;
 
 bool weddingModeFinished = false;
@@ -247,7 +261,21 @@ void loop()
         updateClock();
     }
     if (checkAlarms()) {
+        // refine this
         Serial.println("ALAAAARM!!!");
+    }
+    if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
+        DCF.Start();
+        digitalWrite(DCF_EN_PIN, LOW);
+    } else if (dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN+DCF_LEN) {
+        DCF.Stop();
+        digitalWrite(DCF_EN_PIN, HIGH);
+        dcfSyncSucc = false;
+    } else if (dcfSync && DCF.getTime() != 0) {
+        DCF.Stop();
+        myRTC.set(DCF.getTime());
+        digitalWrite(DCF_EN_PIN, HIGH);
+        dcfSyncSucc = true;
     }
     machine.run();
 }
@@ -292,7 +320,7 @@ void stateMainMenu()
     }
 }
 
-#S3
+//S3
 void stateWeddingMode()
 {
     //Switch Music On
@@ -303,7 +331,7 @@ void stateWeddingMode()
     weddingModeFinished = true;
 }
 
-#S4
+//S4
 void stateClockMenu()
 {
     //Manually set time
@@ -311,7 +339,7 @@ void stateClockMenu()
     //Set Motor Interval
 }
 
-#S5
+//S5
 void stateAlarm1Menu()
 {
     //Set Alarm1
@@ -319,7 +347,7 @@ void stateAlarm1Menu()
     //Select if lights should be on
 }
 
-#S6
+//S6
 void stateAlarm2Menu()
 {
     //Set Alarm2
@@ -327,14 +355,14 @@ void stateAlarm2Menu()
     //Select if lights should be on
 }
 
-#S7
+//S7
 void stateSoundMenu()
 {
     //Set Volume
 
 }
 
-#S8
+//S8
 void stateLighthouseMenu()
 {
     //Lighthouse Settings for normal clock mode
@@ -342,20 +370,20 @@ void stateLighthouseMenu()
     //Main Light Settings
 }
 
-#S9
+//S9
 void stateBrightnessMenu()
 {
     //Brightness Setting for Display
     //MainLED?
 }
 
-#S10
+//S10
 void stateHomingMenu()
 {
     //Motor Homing Procedure
 }
 
-#S11
+//S11
 void stateCreditsMenu()
 {
     //Display Credits on Lighthouse OS
@@ -385,25 +413,6 @@ bool toSleep()
         analogWrite(TFT_LITE, 0);
         currentMenu = -1;
         return true;
-    }
-    return false;
-}
-
-bool closeMainMenu()
-{
-    if (isrbuttonC) {
-      if (selectedMMItem == MMEL-1) {
-          sleepTimer = millis();
-          isrbuttonC = false;
-          analogWrite(TFT_LITE, 0);
-          tft.fillScreen(BKGND);
-          prepareClock();
-          currentMenu = -1;
-          isrTimeChange = true; // to enable clock display
-          delay(50);
-          attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-          return true;
-          }
     }
     return false;
 }
@@ -457,7 +466,7 @@ bool changeMenuSelection()
 
 bool returnToMainMenu()
 {
-    if (isrbuttonC  && (selectedSubItem == 0)){
+    if (isrbuttonC  && (selectedSubMItem == 0)){
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = MMEL;
@@ -559,9 +568,28 @@ bool openHomingMenu()
     return false;
 }
 
+bool closeMainMenu()
+{
+    if (isrbuttonC) {
+      if (selectedMMItem == 7) {
+          sleepTimer = millis();
+          isrbuttonC = false;
+          analogWrite(TFT_LITE, 0);
+          tft.fillScreen(BKGND);
+          prepareClock();
+          currentMenu = -1;
+          isrTimeChange = true; // to enable clock display
+          delay(50);
+          attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+          return true;
+          }
+    }
+    return false;
+}
+
 bool openCreditsMenu()
 {
-    if (isrbuttonC  && (selectedMMItem == 7)){
+    if (isrbuttonC  && (selectedMMItem == 8)){
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
@@ -574,16 +602,16 @@ bool openCreditsMenu()
 
 bool changeToWeddingMode()
 {
-    return false
+    return false;
 }
 
 bool exitWeddingMode()
 {
     if(weddingModeFinished){
-        weddingModeFinished = false
-        return True
+        weddingModeFinished = false;
+        return true;
     }
-    return false
+    return false;
 }
 
 bool attachUnhandledInterrupts()
@@ -694,12 +722,14 @@ void buttonL()
 
 // alarm functions
 
-void setAlarmState ()
+void setAlarmMenu (uint16_t address)
 {
     // make alarm menu screen
     // hh:dd
     // Mo Di Mi Do Fr Sa So
     // w/ some kind of selection for weekday
+    // Light y/n
+    // Sound
 }
 
 /*bool setAlarms ()
@@ -746,6 +776,8 @@ void writeAlarms (uint16_t address, struct alarms alm)
     fram.write(address+1, alm.mm);
     fram.write(address+2, alm.dd);
     fram.write(address+3, alm.act);
+    fram.write(address+4, alm.light);
+    fram.write(address+5, alm.soundfile);
 }
 
 void readAlarms (uint16_t address, struct alarms &alm)
@@ -754,4 +786,6 @@ void readAlarms (uint16_t address, struct alarms &alm)
     alm.mm = fram.read(address+1);
     alm.dd = fram.read(address+2);
     alm.act = fram.read(address+3);
+    alm.light = fram.read(address+4);
+    alm.soundfile = fram.read(address+5);
 }
