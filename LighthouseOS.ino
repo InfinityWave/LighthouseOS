@@ -52,9 +52,9 @@
 #define LITE 200  // standard brightness
 
 #define DCF_INT 6     // interval of dcf sync in hours
-#define DCF_HOUR 5    // hour to start dcf sync
+#define DCF_HOUR 0    // hour to start dcf sync
 #define DCF_MIN 0     // minute to start dcf sync
-#define DCF_LEN 30    // length in minutes of dcf sync attempt
+#define DCF_LEN 3600    // length in seconds of dcf sync attempt
 
 
 // initializations
@@ -75,7 +75,7 @@ State* S11 = machine.addState(&stateCreditsMenu);
 
 DS3232RTC myRTC(false);
 
-DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), LOW);
+DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
 
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C();
 
@@ -95,6 +95,7 @@ char timeString[3];
 char dateString[11];
 bool dcfSync = false;
 bool dcfSyncSucc = false;
+uint32_t dcfSyncStart = 0;
 
 uint8_t clockHour, clockMinute, clockSecond, clockDay;
 
@@ -108,7 +109,6 @@ const char *mainMenuEntries[MMEL] = {"Clock", "Alarm1", "Alarm2", "Sound", "Ligh
 
 //menu variables
 int8_t selectedMMItem = 0;
-int8_t selectedSubMItem = -1;
 int8_t currentMenu = -1;
 uint32_t sleepDelay = 60000;
 uint32_t sleepTimer = 0;
@@ -127,6 +127,13 @@ struct alarms {
     bool light;
     uint8_t soundfile;
 } alm1, alm2;
+
+struct menuStruct {
+    uint8_t selectedItem = 0;
+    uint8_t currentVal = 0;
+    int16_t item[8];
+    
+} submenu;
 
 bool weddingModeFinished = false;
 
@@ -166,6 +173,7 @@ void setup(void) {
     S3->addTransition(&exitWeddingMode,S0);
     //Return from all SubMenus
     S4->addTransition(&returnToMainMenu,S2);
+    S4->addTransition(&changeClockMenuSelection,S4);
     S5->addTransition(&returnToMainMenu,S2);
     S6->addTransition(&returnToMainMenu,S2);
     S7->addTransition(&returnToMainMenu,S2);
@@ -202,6 +210,8 @@ void setup(void) {
     myRTC.alarmInterrupt(ALARM_2, true);
     attachInterrupt(digitalPinToInterrupt(DS3231_INT), isrChangeTime, FALLING);
     isrTimeChange = true;
+    //myRTC.set(1577836800);
+    updateClock();
     if(isrTime > 0)
         Serial.println("RTC has set the system time");
     else
@@ -267,15 +277,30 @@ void loop()
     if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
         DCF.Start();
         digitalWrite(DCF_EN_PIN, LOW);
-    } else if (dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN+DCF_LEN) {
+        dcfSync = true;
+        dcfSyncStart = isrTime;
+        Serial.print("DCFSync start: ");
+        Serial.print(hour(isrTime));
+        Serial.print(":");
+        Serial.println(minute(isrTime));
+    }
+    if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
         DCF.Stop();
         digitalWrite(DCF_EN_PIN, HIGH);
+        dcfSync = false;
         dcfSyncSucc = false;
-    } else if (dcfSync && DCF.getTime() != 0) {
+        Serial.println("Sync Failed");
+    }
+    if (dcfSync && DCF.getTime() != 0) {
         DCF.Stop();
         myRTC.set(DCF.getTime());
         digitalWrite(DCF_EN_PIN, HIGH);
+        dcfSync = false;
         dcfSyncSucc = true;
+        Serial.print("Sync Success");
+        Serial.print(hour(isrTime));
+        Serial.print(":");
+        Serial.println(minute(isrTime));
     }
     machine.run();
 }
@@ -466,7 +491,7 @@ bool changeMenuSelection()
 
 bool returnToMainMenu()
 {
-    if (isrbuttonC  && (selectedSubMItem == 0)){
+    if (isrbuttonC  && (submenu.selectedItem == 0)){
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = MMEL;
@@ -483,6 +508,12 @@ bool openClockMenu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
+        submenu.item[0] = hour(isrTime);
+        submenu.item[1] = minute(isrTime);
+        submenu.item[2] = day(isrTime);
+        submenu.item[3] = month(isrTime);
+        submenu.item[4] = year(isrTime);
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -490,12 +521,48 @@ bool openClockMenu()
     return false;
 }
 
+bool changeClockMenuSelection()
+{
+  if (isrbuttonC){
+    isrbuttonC = false;
+    submenu.selectedItem = (submenu.selectedItem + 1) % 6;
+    delay(50);
+    attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+    return true;
+    }
+  if (isrButtonL || isrButtonR) {
+    if (isrButtonL){
+      isrButtonL = false;
+      submenu.item[submenu.selectedItem] --;
+      
+    delay(50);
+    attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+    }
+    else {
+      isrButtonR = false;
+      submenu.item[submenu.selectedItem] ++; 
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+    }
+    
+/*      switch (submenu.selected) {
+        case: 
+      }*/
+    return true;
+    }
+  
+}
+
+
+
+
 bool openAlarm1Menu()
 {
     if (isrbuttonC  && (selectedMMItem == 1)){
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -509,6 +576,7 @@ bool openAlarm2Menu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -522,6 +590,7 @@ bool openSoundMenu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -535,6 +604,7 @@ bool openLighthouseMenu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -548,6 +618,7 @@ bool openBrigthnessMenu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -561,6 +632,7 @@ bool openHomingMenu()
         sleepTimer = millis();
         isrbuttonC = false;
         currentMenu = selectedMMItem;
+        submenu.selectedItem = 0;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;   
@@ -668,6 +740,7 @@ void clockDisplay()
             tft.drawBitmap(31, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
         }
         if (clockMinute != minute(isrTime)){
+            Serial.println(DCF.getTime());
             clockMinute = minute(isrTime);
             sprintf(timeString,"%02d",clockMinute);
             canvasClock.fillScreen(BKGND);
