@@ -8,7 +8,7 @@
 #include <Adafruit_FRAM_I2C.h> //from lib manager v2.0
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ILI9341.h>// Controller specific library
-#include <CheapStepper.h>
+#include <CheapStepper.h> //https://github.com/H4K5M6/CheapStepper
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans18pt7b.h>
 #include "Adresses.h"
@@ -24,7 +24,7 @@
 //use Hardware SPI NANO: SCK=13, MISO=12, MOSI=11 
 #define TFT_DC 9
 #define TFT_CS 8
-#define TFT_LITE 10 //PWM pin
+#define TFT_LITE 12 //PWM pin
 //#define TFT_RESET 
 
 //Button pins
@@ -39,10 +39,10 @@
 #define LED_MAIN          //PWM pin
 
 // stepper pins
-#define STEP_IN1
-#define STEP_IN2
-#define STEP_IN3
-#define STEP_IN4
+#define STEP_IN1 A0
+#define STEP_IN2 A1
+#define STEP_IN3 A2
+#define STEP_IN4 A3
 
 //Parameters
 #define BKGND ILI9341_BLACK // background color
@@ -56,6 +56,8 @@
 #define DCF_MIN 0     // minute to start dcf sync
 #define DCF_LEN 3600    // length in seconds of dcf sync attempt
 
+#define STEP_RPM 1
+#define STEP_N 4096
 
 // initializations
 StateMachine machine = StateMachine();
@@ -84,6 +86,8 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 GFXcanvas1 canvasClock(76, 54); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(232, 38); // Canvas for Date
 GFXcanvas1 canvasDay(242, 50); // Canvas for Date
+
+CheapStepper stepper (STEP_IN1, STEP_IN2, STEP_IN3, STEP_IN4); 
 
 int16_t  x, y;
 uint16_t w, h;
@@ -115,6 +119,10 @@ uint32_t sleepTimer = 0;
 bool updateScreen = false;
 bool changeValue = false;
 
+//stepper variables
+bool moveTower = true;
+bool stepperActive = false;
+
 //display variable
 uint8_t brightness = LITE;
 
@@ -143,6 +151,9 @@ void setup(void) {
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
     analogWrite(TFT_LITE, 0);
+
+    //stepper setup
+    stepper.setRpm(STEP_RPM);
 
     // DCF setup
     digitalWrite(DCF_EN_PIN, HIGH);
@@ -228,6 +239,7 @@ void setup(void) {
     // space for variable inits
     readAlarms(ALARM1, alm1);
     readAlarms(ALARM2, alm2);
+    stepper.setStep(read16bit(C_STEP));
     
     /*tft.setFont(&FreeSans12pt7b);
     /*for (int i = 0; i < 100; i = i+11){
@@ -303,6 +315,14 @@ void loop()
         Serial.println(minute(isrTime));
     }
     machine.run();
+    stepper.run();
+    if (moveTower) {
+        stepper.run();
+        if (stepperActive && stepper.getStepsLeft() == 0) {
+            stepperActive = false;
+            stepper.off();
+        }
+    }
 }
 
 // main clock display
@@ -310,7 +330,7 @@ void stateClockDisplay()
 {
     if (isrTimeUpdate) {
         isrTimeUpdate = false;
-        clockDisplay();
+        clockDisplay(isrTime);
         analogWrite(TFT_LITE, brightness);
     }
 }
@@ -321,7 +341,7 @@ void stateStandby()
     //nothing yet maybe send arduino to sleep
     if (isrTimeUpdate) {
         isrTimeUpdate = false;
-        clockDisplay();
+        clockDisplay(isrTime);
     }
 }
 
@@ -362,6 +382,7 @@ void stateClockMenu()
     //Manually set time
     //Set Light Interval
     //Set Motor Interval
+    clockDisplay(isrTime);
 }
 
 //S5
@@ -728,25 +749,31 @@ void updateClock()
     myRTC.alarm(ALARM_2);
 }
 
-void clockDisplay()
+void clockDisplay(time_t t)
 {
     
-        if (clockHour != hour(isrTime)){
-            clockHour = hour(isrTime);
+        if (clockHour != hour(t)){
+            clockHour = hour(t);
             sprintf(timeString,"%02d",clockHour);
             canvasClock.fillScreen(BKGND);
             canvasClock.setCursor(0, 50);
             canvasClock.println(timeString);
             tft.drawBitmap(31, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
         }
-        if (clockMinute != minute(isrTime)){
-            Serial.println(DCF.getTime());
-            clockMinute = minute(isrTime);
+        if (clockMinute != minute(t)){
+            clockMinute = minute(t);
             sprintf(timeString,"%02d",clockMinute);
             canvasClock.fillScreen(BKGND);
             canvasClock.setCursor(0, 50);
             canvasClock.println(timeString);
             tft.drawBitmap(121, 38, canvasClock.getBuffer(), 76, 54, TXT, BKGND);
+            if (moveTower) {
+                stepper.newMoveToDegree(true, ((uint16_t)clockMinute)*30);
+                stepperActive = true;
+                Serial.println(((uint16_t)clockMinute)*30);
+                Serial.println(stepper.getStep());
+                Serial.println(stepper.getStepsLeft());
+            }
         }
         /*if (clockSecond != second(isrTime)){
             clockSecond = second(isrTime);
@@ -756,8 +783,8 @@ void clockDisplay()
             canvasClock.println(timeString);
             tft.drawBitmap(211, 38, canvasClock.getBuffer(), 76, 54, ILI9341_WHITE, ILI9341_RED);
         }*/
-        if (clockDay != day(isrTime)){
-            clockDay = day(isrTime);
+        if (clockDay != day(t)){
+            clockDay = day(t);
             sprintf(dateString,"%02d.%02d.%04d", clockDay, month(isrTime), year(isrTime));
             canvasDate.fillScreen(BKGND);
             canvasDate.setCursor(0, 34);
@@ -843,6 +870,8 @@ bool checkAlarms ()
     return false;
 }
 
+//FRAM functions
+
 void writeAlarms (uint16_t address, struct alarms alm)
 {
     fram.write(address, alm.hh);
@@ -861,4 +890,29 @@ void readAlarms (uint16_t address, struct alarms &alm)
     alm.act = fram.read(address+3);
     alm.light = fram.read(address+4);
     alm.soundfile = fram.read(address+5);
+}
+
+void write16bit (uint16_t address, uint16_t data)
+{
+    fram.write(address, (uint8_t*)&data, 2);
+}
+
+uint16_t read16bit (uint16_t address)
+{
+    uint16_t data;
+    fram.read(address, (uint8_t*)&data, 2);
+    return data;
+}
+
+
+void write32bit (uint16_t address, uint32_t data)
+{
+    fram.write(address, (uint8_t*)&data, 4);
+}
+
+uint32_t read32bit (uint16_t address)
+{
+    uint32_t data;
+    fram.read(address, (uint8_t*)&data, 4);
+    return data;
 }
