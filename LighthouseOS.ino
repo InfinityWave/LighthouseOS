@@ -45,8 +45,8 @@
 #define STEP_IN4 A3
 
 //Parameters
-#define BKGND ILI9341_BLACK // background color
-#define TXT ILI9341_WHITE // text color
+#define COLOR_BKGND ILI9341_BLACK // background color
+#define COLOR_TXT ILI9341_WHITE // text color
 #define MMEL 9    // number of menu entries
 
 // TFT/Canvas Settings
@@ -57,14 +57,26 @@
 #define CANVAS_CLOCK_CURSOR_POS 50
 #define CANVAS_DATE_WIDTH 232
 #define CANVAS_DATE_CURSOR_POS 34
+// Canvas Settings for Left and Right Menu Icons
 #define CANVAS_MENULR_WIDTH 45
 #define CANVAS_MENULR_HEIGHT 45
 #define CANVAS_MENULR_OFFSET_X 5
 #define CANVAS_MENULR_OFFSET_Y 7
+//Global Position for Icon Canvas
 #define CANVAS_MENUL_X 10
 #define CANVAS_MENUL_Y 0
 #define CANVAS_MENUR_X 240
 #define CANVAS_MENUR_Y 0
+#define CENTER_ICON_X 160
+#define CENTER_ICON_Y 15
+#define CENTER_ICON_SIZE 10
+#define CENTER_ICON_LW 2
+//ClockDisplaySettings
+#define CLOCKDISPLAY_BTLINE_Y 220
+//MenuSettings
+#define MENU_TOPLINE_Y 50
+#define MENU_ITEM1_Y 80
+
 
 
 #define LITE 200  // standard brightness
@@ -109,9 +121,6 @@ DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C();
 
 CheapStepper stepper (STEP_IN1, STEP_IN2, STEP_IN3, STEP_IN4); 
-
-int16_t  x, y;
-uint16_t w, h;
 
 volatile time_t isrTime;
 volatile bool isrTimeChange;
@@ -220,10 +229,10 @@ void setup(void) {
     // TFT setup
     delay(500);
     tft.begin();
-    tft.setTextColor(TXT);
+    tft.setTextColor(COLOR_TXT);
     tft.setTextSize(2);
     tft.setRotation(3);
-    tft.fillScreen(BKGND);
+    tft.fillScreen(COLOR_BKGND);
     tft.setFont(&FreeSans18pt7b);
     tft.setCursor(105,88);
     tft.print(":");
@@ -426,18 +435,20 @@ void stateMainMenu()
 {
     if (updateScreen) {
         updateScreen = false;
-    tft.setCursor(100,40);
-    tft.setFont(&FreeSans12pt7b);
-    tft.println("Menu");
-    tft.drawFastHLine(0,50,320,TXT);
-    tft.fillCircle(15,145,7,TXT);
-    tft.setCursor(40,100);
-    tft.println(mainMenuEntries[(selectedMMItem+MMEL-1)%MMEL]);
-    tft.setCursor(40,160);
-    tft.println(mainMenuEntries[selectedMMItem]);
-    tft.setCursor(40,220);
-    tft.println(mainMenuEntries[(selectedMMItem+1)%MMEL]);
-    analogWrite(TFT_LITE, brightness);
+        // Draw Top Icons
+        drawMenuSetter(true);
+        tft.setCursor(100,40);
+        tft.setFont(&FreeSans12pt7b);
+        tft.println("Menu");
+        tft.drawRect(0,55,320,MENULINEWIDTH,COLOR_TXT);
+        tft.fillCircle(15,145,7,COLOR_TXT);
+        tft.setCursor(40,100);
+        tft.println(mainMenuEntries[(selectedMMItem+MMEL-1)%MMEL]);
+        tft.setCursor(40,160);
+        tft.println(mainMenuEntries[selectedMMItem]);
+        tft.setCursor(40,220);
+        tft.println(mainMenuEntries[(selectedMMItem+1)%MMEL]);
+        analogWrite(TFT_LITE, brightness);
     }
 }
 
@@ -460,8 +471,8 @@ void stateClockMenu()
     tft.setCursor(100,40);
     //tft.setFont(&FreeSans12pt7b);
     tft.println("Clock");
-    tft.drawFastHLine(0,50,320,TXT);
-    tft.fillCircle(15,145,7,TXT);
+    tft.drawFastHLine(0,50,320,COLOR_TXT);
+    tft.fillCircle(15,145,7,COLOR_TXT);
     tft.setCursor(40,100);
     tft.println(mainMenuEntries[(selectedMMItem+MMEL-1)%MMEL]);
     tft.setCursor(40,160);
@@ -533,8 +544,7 @@ bool openMainMenu()
       isrbuttonC = false;
       sleepTimer = millis();
       analogWrite(TFT_LITE, 0);
-      tft.fillScreen(BKGND);
-      drawMenuSetter(true);
+      tft.fillScreen(COLOR_BKGND);
       currentMenu = MMEL;
       selectedMMItem = 0;
       updateScreen = true;
@@ -582,7 +592,7 @@ bool changeMenuSelection()
     if(isrButtonR){
         isrButtonR = false;
         analogWrite(TFT_LITE, 0);
-        tft.fillScreen(BKGND);
+        tft.fillScreen(COLOR_BKGND);
         selectedMMItem = (selectedMMItem+1)%noItems;
         updateScreen = true;
         delay(50);
@@ -592,7 +602,7 @@ bool changeMenuSelection()
     if(isrButtonL){
         isrButtonL = false;
         analogWrite(TFT_LITE, 0);
-        tft.fillScreen(BKGND);
+        tft.fillScreen(COLOR_BKGND);
         selectedMMItem = (selectedMMItem+noItems-1)%noItems;
         updateScreen = true;
         delay(50);
@@ -755,7 +765,7 @@ bool closeMainMenu()
           sleepTimer = millis();
           isrbuttonC = false;
           analogWrite(TFT_LITE, 0);
-          tft.fillScreen(BKGND);
+          tft.fillScreen(COLOR_BKGND);
           prepareClock();
           currentMenu = -1;
           isrTimeChange = true; // to enable clock display
@@ -839,7 +849,7 @@ void updateClock()
 void updateCanvasClock(uint8_t cDigit, bool underline)
 {
     sprintf(timeString,"%02d",cDigit);
-    canvasClock.fillScreen(BKGND);
+    canvasClock.fillScreen(COLOR_BKGND);
     canvasClock.setCursor(0, CANVAS_CLOCK_CURSOR_POS);
     canvasClock.println(timeString);
     if (underline)
@@ -847,7 +857,7 @@ void updateCanvasClock(uint8_t cDigit, bool underline)
         int16_t  x, y;
         uint16_t w, h;
         canvasClock.getTextBounds(timeString, 0, CANVAS_CLOCK_CURSOR_POS, &x, &y, &w, &h);
-        canvasClock.fillRect(x, y+h+1, w, MENULINEWIDTH, TXT);
+        canvasClock.fillRect(x, y+h+1, w, MENULINEWIDTH, COLOR_TXT);
     }
 
 }
@@ -856,7 +866,7 @@ void updateCanvasDate(uint8_t cDay, uint8_t cMonth, uint16_t cYear, int8_t under
 {
     uint8_t cursorPos = CANVAS_DATE_CURSOR_POS;
     sprintf(dateString,"%02d.%02d.%04d", cDay, cMonth, cYear);
-    canvasDate.fillScreen(BKGND);
+    canvasDate.fillScreen(COLOR_BKGND);
     canvasDate.setCursor(0, CANVAS_DATE_CURSOR_POS);
     canvasDate.println(dateString);
     if (true)
@@ -868,14 +878,14 @@ void updateCanvasDate(uint8_t cDay, uint8_t cMonth, uint16_t cYear, int8_t under
         canvasDate.getTextBounds(dateString, 0, cursorPos, &x1, &y1, &w1, &h1);
         sprintf(dateString,"%04d", cYear);
         canvasDate.getTextBounds(dateString, 0, cursorPos, &x2, &y2, &w2, &h2);
-        canvasDate.fillRect(x1+w1-w2, y1+h2+1, w2, MENULINEWIDTH, TXT);
+        canvasDate.fillRect(x1+w1-w2, y1+h2+1, w2, MENULINEWIDTH, COLOR_TXT);
     }
 
 }
 
 void updateCanvasMenuSetter(int signtype)
 {
-    canvasMenuLR.fillScreen(BKGND);
+    canvasMenuLR.fillScreen(COLOR_BKGND);
     canvasMenuLR.setCursor(CANVAS_MENULR_OFFSET_X, CANVAS_MENULR_HEIGHT-CANVAS_MENULR_OFFSET_Y);
     
     switch (signtype)
@@ -890,15 +900,15 @@ void drawMenuSetter(bool isOn)
 {
     if (true){
         updateCanvasMenuSetter(0);
-        tft.drawBitmap(CANVAS_MENUL_X, CANVAS_MENUL_Y, canvasMenuLR.getBuffer(), CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT, TXT, ILI9341_RED);
+        tft.drawBitmap(CANVAS_MENUL_X, CANVAS_MENUL_Y, canvasMenuLR.getBuffer(), CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT, COLOR_TXT, COLOR_BKGND);
         updateCanvasMenuSetter(1);
-        tft.drawBitmap(CANVAS_MENUR_X, CANVAS_MENUR_Y, canvasMenuLR.getBuffer(), CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT, TXT, ILI9341_BLUE);
-
+        tft.drawBitmap(CANVAS_MENUR_X, CANVAS_MENUR_Y, canvasMenuLR.getBuffer(), CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT, COLOR_TXT, COLOR_BKGND);
     }
     else{
 
     }
-
+    tft.fillCircle(CENTER_ICON_X, CENTER_ICON_Y, CENTER_ICON_Y, COLOR_TXT);
+    tft.fillCircle(CENTER_ICON_X, CENTER_ICON_Y, CENTER_ICON_Y-CENTER_ICON_LW, COLOR_BKGND);
 }
 
 void clockDisplay(time_t t)
@@ -906,12 +916,12 @@ void clockDisplay(time_t t)
         if (clockHour != hour(t)){
             clockHour = hour(t);
             updateCanvasClock(clockHour, true);
-            tft.drawBitmap(31, 38, canvasClock.getBuffer(), CANVAS_CLOCK_WIDTH, canvasClockHeight, TXT, ILI9341_RED);
+            tft.drawBitmap(31, 38, canvasClock.getBuffer(), CANVAS_CLOCK_WIDTH, canvasClockHeight, COLOR_TXT, ILI9341_RED);
         }
         if (clockMinute != minute(t)){
             clockMinute = minute(t);
             updateCanvasClock(clockMinute, true);
-            tft.drawBitmap(121, 38, canvasClock.getBuffer(), CANVAS_CLOCK_WIDTH, canvasClockHeight, TXT, BKGND);
+            tft.drawBitmap(121, 38, canvasClock.getBuffer(), CANVAS_CLOCK_WIDTH, canvasClockHeight, COLOR_TXT, COLOR_BKGND);
             if (moveTower) {
                 stepper.newMoveToDegree(true, ((uint16_t)clockMinute)*30);
                 stepperActive = true;
@@ -931,7 +941,7 @@ void clockDisplay(time_t t)
         if (clockDay != day(t)){
             clockDay = day(t);
             updateCanvasDate(clockDay, month(isrTime), year(isrTime), -1);
-            tft.drawBitmap(44, 138, canvasDate.getBuffer(), CANVAS_DATE_WIDTH, canvasDateHeight, TXT, ILI9341_BLUE);
+            tft.drawBitmap(44, 138, canvasDate.getBuffer(), CANVAS_DATE_WIDTH, canvasDateHeight, COLOR_TXT, ILI9341_BLUE);
         }
 }
 
