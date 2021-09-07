@@ -76,7 +76,7 @@ Date "11.09.2021":
 #define TFT_MARGIN_LEFT 10
 #define TFT_MARGIN_LEFT 30
 #define TFT_MARGIN_TOP 7 
-#define TFT_MARGIN_BOT 20
+#define TFT_MARGIN_BOT 25
 // Canvas Settings for Left and Right Menu Icons
 #define CANVAS_MENULR_WIDTH 45
 #define CANVAS_MENULR_HEIGHT 45
@@ -96,10 +96,9 @@ Date "11.09.2021":
 #define CLOCKDISPLAY_CLOCK_Y 38
 #define CLOCKDISPLAY_DATE_X 0
 #define CLOCKDISPLAY_DATE_Y 120
-#define CLOCKDISPLAY_INFO_BOTTOM 50
 #define CLOCKDISPLAY_LH_X 0
-#define CLOCKDISPLAY_SYNC_X 150
-#define CLOCKDISPLAY_TEMP_X 200
+#define CLOCKDISPLAY_SYNC_X 180
+#define CLOCKDISPLAY_TEMP_X 250
 
 //MenuSettings
 #define MENULINEWIDTH 3
@@ -127,8 +126,8 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuItem(300, FONTSIZE_SMALL_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH);
-GFXcanvas1 canvasTinyFont(300, FONTSIZE_TINY_HEIGHT+CANVAS_FONT_MARGIN);
+GFXcanvas1 canvasMenuItem(280, FONTSIZE_SMALL_HEIGHT+CANVAS_FONT_MARGIN+4*MENULINEWIDTH);
+GFXcanvas1 canvasTinyFont(300, FONTSIZE_TINY_HEIGHT+3*CANVAS_FONT_MARGIN);
 GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
 
 //Variables to store size of display/canvas texts
@@ -483,21 +482,21 @@ void drawClockDisplayInfo(){
     tempChanged = false;
     DCFSyncChanged = false;
     
-    int16_t ypos = TFT_HEIGHT - CLOCKDISPLAY_INFO_BOTTOM - canvasTinyFont.height();
+    int16_t ypos = TFT_HEIGHT - TFT_MARGIN_BOT - canvasTinyFont.height();
     
     canvasTinyFont.fillScreen(COLOR_BKGND);
-    tft.fillRect(0, ypos- MENULINEWIDTH, TFT_WIDTH, MENULINEWIDTH, COLOR_TXT);
+    tft.fillRect(0, ypos-MENULINEWIDTH, TFT_WIDTH, MENULINEWIDTH, COLOR_TXT);
 
-    canvasTinyFont.setCursor(CLOCKDISPLAY_LH_X, FONTSIZE_TINY_HEIGHT+MENULINEWIDTH+CANVAS_FONT_MARGIN);
+    canvasTinyFont.setCursor(CLOCKDISPLAY_LH_X, FONTSIZE_TINY_HEIGHT+CANVAS_FONT_MARGIN);
     canvasTinyFont.print("LighthouseOS");
     
     if (DCFSyncStatus){
-        canvasTinyFont.setCursor(CLOCKDISPLAY_SYNC_X, FONTSIZE_TINY_HEIGHT+MENULINEWIDTH+CANVAS_FONT_MARGIN);
+        canvasTinyFont.setCursor(CLOCKDISPLAY_SYNC_X, FONTSIZE_TINY_HEIGHT+CANVAS_FONT_MARGIN);
         canvasTinyFont.print("DCF");
     }
     //sprintf(outString, "%d", (int)currentTemp);
-    canvasTinyFont.setCursor(CLOCKDISPLAY_TEMP_X, FONTSIZE_TINY_HEIGHT+MENULINEWIDTH+CANVAS_FONT_MARGIN);
-    sprintf(outString, "%d", (int)21.3);
+    canvasTinyFont.setCursor(CLOCKDISPLAY_TEMP_X, FONTSIZE_TINY_HEIGHT+CANVAS_FONT_MARGIN);
+    sprintf(outString, "%d", (int)currentTemp);
     canvasTinyFont.print(outString);
     //canvasTinyFont.print((char)247);
     canvasTinyFont.print("C");
@@ -513,7 +512,6 @@ void stateStandby()
         clockDisplay(isrTime);
     }
 }
-
 
 //S1
 // main menu
