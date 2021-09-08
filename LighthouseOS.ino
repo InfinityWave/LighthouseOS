@@ -137,7 +137,7 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuItem(160, FONTSIZE_SMALL_HEIGHT+4*CANVAS_FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
+GFXcanvas1 canvasMenuItem(180, FONTSIZE_SMALL_HEIGHT+3*CANVAS_FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
 GFXcanvas1 canvasTinyFont(220, FONTSIZE_TINY_HEIGHT+3*CANVAS_FONT_MARGIN);
 GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
 
@@ -147,8 +147,6 @@ uint16_t w1, h1;
 uint16_t x2, y2;
 uint16_t w2, h2;
 int16_t cursorX, cursorY;
-
-
 
 // Define StateMachine
 /////////////////////////////////////////////////////////////
@@ -193,7 +191,7 @@ bool DCFSyncChanged = false;
 uint32_t dcfSyncStart = 0;
 
 uint8_t clockHour, clockMinute, clockSecond, clockDay;
-float currentTemp = 20.0;
+float currentTemp = 19.0;
 bool tempChanged = false;
 
 
@@ -208,6 +206,8 @@ const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm1", "Alarm2", "Sou
 //menu variables
 int8_t selectedMMItem = 0;
 int8_t currentMenu = -1;
+uint32_t rtcSyncDelay = 10*60*1000; // 10min
+uint32_t rtcSyncTimer = 0;
 uint32_t sleepDelay = 60000;
 uint32_t sleepTimer = 0;
 bool updateScreen = true;
@@ -429,6 +429,12 @@ void loop()
     if (isrTimeChange) {
         updateClock();
     }
+    // Trigger new read from RTC
+    if (millis() - rtcSyncTimer > rtcSyncDelay){
+        rtcSyncTimer = millis();
+        isrTimeChange = true;
+        update_temperature();
+    }
 	// Time from DCF
     if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
         DCF.Start();
@@ -445,7 +451,7 @@ void loop()
         digitalWrite(DCF_EN_PIN, HIGH);
         dcfSync = false;
         dcfSyncSucc = false;
-        DCFSyncStatus = true; //ToDo
+        DCFSyncStatus = false;;
         DCFSyncChanged = true;
         Serial.println("Sync Failed");
     }
@@ -462,13 +468,11 @@ void loop()
         Serial.print(":");
         Serial.println(minute(isrTime));
     }
-    sprintf(outString, "RTC Time: %d", myRTC.get());
-	Serial.println(outString);
 	// Run interface
 	//////////////////////////
 	// StateMachine
     machine.run();
-	// Show time via tower light
+	// ToDo Show time via tower light
 	//updateTowerLight(isrTime);
     stepper.run();
     if (moveTower) {
@@ -536,7 +540,7 @@ void stateClockDisplay()
         updateClockSign = true;
         drawClockDisplayInfo();
         drawMenuSetter(false);
-        tft.drawRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+        tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
     }
     if (isrTimeUpdate) {
         isrTimeUpdate = false;
@@ -632,20 +636,21 @@ void stateMainMenu()
         // Draw Top Icons
         drawMenuSetter(true);
         cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
-        tft.drawRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+        tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
         cursorY = cursorY + MENULINEWIDTH+CANVAS_FONT_MARGIN+FONTSIZE_NORMAL_HEIGHT;
         // Write Center Entry
         tft.getTextBounds("MainMenu", 0, cursorY, &x1, &y1, &w1, &h1);
         cursorX = (uint8_t) ((TFT_WIDTH - TFT_MARGIN_LEFT - TFT_MARGIN_RIGHT - w1) / 2);
         tft.setCursor(cursorX, cursorY);
-        tft.println("MainMenu");       
+        tft.println("MainMenu");      
+        tft.fillRect(0,y1+h1+2,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT); 
         
         
         updateMenuSelection = true;
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     if (updateMenuSelection){
-        cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y+MENULINEWIDTH+CANVAS_FONT_MARGIN+FONTSIZE_NORMAL_HEIGHT;
+        cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y+2*MENULINEWIDTH+3*CANVAS_FONT_MARGIN+FONTSIZE_NORMAL_HEIGHT;
         for (int i=0; i<MENU_ITEMS; i++){
             canvasMenuItem.fillScreen(COLOR_BKGND);
             canvasMenuItem.setCursor(0,CANVAS_FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
@@ -770,7 +775,7 @@ bool openMainMenu()
 
 bool toSleep()
 {
-    if (millis() > sleepTimer + sleepDelay) {
+    if (millis() - sleepTimer >  + sleepDelay) {
         analogWrite(TFT_LITE, 0);
         currentMenu = -1;
         return true;
@@ -781,9 +786,10 @@ bool toSleep()
 bool wakeup()
 {
     if (isrbuttonC||isrButtonR||isrButtonL) {
-      isrbuttonC = false;
-      isrButtonR = false;
-      isrButtonL = false;
+      // Following section uncommented to save pressed buttons after WakeUP
+      //isrbuttonC = false;
+      //isrButtonR = false;
+      //isrButtonL = false;
       sleepTimer = millis();
       currentMenu = -1;
       isrTimeUpdate = true;
@@ -1259,7 +1265,7 @@ void clockDisplay(time_t t)
 // read temperature from RTC:
 void update_temperature(){
     // Read temperature from RTC and update if necessary
-    float newtemp = 22.1; // ToDo replace with actual reading
+    float newtemp = myRTC.temperature()/4; // ToDo replace with actual reading
     if (! (newtemp==currentTemp)){
         currentTemp = newtemp;
         tempChanged = false;
