@@ -82,8 +82,8 @@ Date "11.09.2021":
 #define TFT_MARGIN_BOT 25
 // Canvas Settings for Left and Right Menu Icons
 #define CANVAS_MENULR_WIDTH 45
-#define CANVAS_MENULR_HEIGHT 38
-#define CANVAS_MENULR_ICONOFFSET 20
+#define CANVAS_MENULR_HEIGHT 30
+#define CANVAS_MENULR_ICONOFFSET 12
 //Global Position for Icon Canvas
 #define CANVAS_MENUL_X 5
 #define CANVAS_MENUL_Y 7
@@ -109,12 +109,13 @@ Date "11.09.2021":
 #define MENU_ITEMS_X 35
 #define MENU_ITEM1_Y 80
 #define MENU_SEL_X 10
-#define MENU_SEL_Y 138
+#define MENU_SEL_Y 150
 #define MENU_SEL_SIZE 5
 //SpecialMenuSettings
 #define MAINMENU_ITEMS 9    // number of menu entries
 #define MAINMENU_TXT_X 120
-
+//SpecialSubMenuSettings
+#define SUBMENU_MAX_ITEMS 8
 
 
 
@@ -146,7 +147,7 @@ int16_t  x1, y1;
 uint16_t w1, h1;
 uint16_t x2, y2;
 uint16_t w2, h2;
-int16_t cursorX, cursorY;
+int16_t cursorX, cursorY, cursorYMenuStart;
 
 // Define StateMachine
 /////////////////////////////////////////////////////////////
@@ -186,7 +187,7 @@ char dateString[11];
 char outString[100];
 bool dcfSync = false;
 bool dcfSyncSucc = false;
-bool DCFSyncStatus = true;
+bool DCFSyncStatus = false;
 bool DCFSyncChanged = false;
 uint32_t dcfSyncStart = 0;
 
@@ -196,16 +197,15 @@ bool tempChanged = false;
 
 
 // button flags
-volatile bool isrbuttonC = false;
+volatile bool isrButtonC = false;
 volatile bool isrButtonL = false;
 volatile bool isrButtonR = false;
 
 // menu entries
-const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm1", "Alarm2", "Sound", "Light", "Brightness", "Homing", "Back", "Credits"};
+const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
 
 //menu variables
 int8_t selectedMMItem = 0;
-int8_t currentMenu = -1;
 uint32_t rtcSyncDelay = 10*60*1000; // 10min
 uint32_t rtcSyncTimer = 0;
 uint32_t sleepDelay = 60000;
@@ -244,10 +244,14 @@ struct alarms {
 uint8_t hours_per_day = 24; 
 
 struct menuStruct {
+    uint8_t num_items;
     uint8_t selectedItem = 0;
     uint8_t currentVal = 0;
-    int16_t item[8];
-    
+    int16_t item[SUBMENU_MAX_ITEMS];
+    int8_t dateinfo_starts;
+    int8_t timeinfo_starts;
+    uint8_t maxVal[SUBMENU_MAX_ITEMS];
+    uint8_t minVal[SUBMENU_MAX_ITEMS];
 } submenu;
 
 bool weddingModeFinished = false;
@@ -276,14 +280,14 @@ void setup(void) {
     S0->addTransition(&openMainMenu,S2);    // to main menu
     S0->addTransition(&changeToWeddingMode,S3); //start wedding mode
 	//S0->addTransition(&startAlarm,S99); // check and start alarm
-    S0->addTransition(&attachUnhandledInterrupts,S0);   //Must be last item
+    S0->addTransition(&reAttachUnhandledInterrupts,S0);   //Must be last item
     // from standby
     S1->addTransition(&wakeup,S0);          // to clock
 	//S1->addTransition(&startAlarm,S99); // check and start alarm
     // from main menu
     S2->addTransition(&returnToClockDisplay,S0); //After timeout
     S2->addTransition(&closeMainMenu,S0);   // to clock
-    S2->addTransition(&changeMenuSelection,S2); // stay and change selection
+    S2->addTransition(&changeMainMenuSelection,S2); // stay and change selection
     S2->addTransition(&openClockMenu,S4);
     S2->addTransition(&openAlarm1Menu,S5);
     S2->addTransition(&openAlarm2Menu,S6);
@@ -293,55 +297,55 @@ void setup(void) {
     S2->addTransition(&openHomingMenu,S10);
     S2->addTransition(&openCreditsMenu,S11);
 	//S2->addTransition(&startAlarm,S99); // check and start alarm
-    //S2->addTransition(&attachUnhandledInterrupts,S2);   //Must be last item
+    //S2->addTransition(&anyButtonPressed,S2);   //Must be last item
     // from wedding mode
     S3->addTransition(&exitWeddingMode,S0);
-    //Return from all SubMenus
+    //Returns from all SubMenus (Timeout and pressed Buttons and alarms)
+    //Clock Menu
     S4->addTransition(&returnToClockDisplay,S0); //After timeout
     S4->addTransition(&returnToMainMenu,S2);
-    S4->addTransition(&changeClockMenuSelection,S4);
+    S4->addTransition(&changeSubMenuSelection,S4);
+    //S4->addTransition(&startAlarm,S99); // check and start alarm
+    //Alarm1 Menu
     S5->addTransition(&returnToClockDisplay,S0); //After timeout
     S5->addTransition(&returnToMainMenu,S2);
+	//S5->addTransition(&startAlarm,S99); // check and start alarm    
+    //Alarm2 Menu
     S6->addTransition(&returnToClockDisplay,S0); //After timeout
     S6->addTransition(&returnToMainMenu,S2);
+	//S6->addTransition(&startAlarm,S99); // check and start alarm
+    //Sound Menu
     S7->addTransition(&returnToClockDisplay,S0); //After timeout
     S7->addTransition(&returnToMainMenu,S2);
+	//S7->addTransition(&startAlarm,S99); // check and start alarm
+    //Volumne Menu
     S8->addTransition(&returnToClockDisplay,S0); //After timeout
     S8->addTransition(&returnToMainMenu,S2);
+	//S8->addTransition(&startAlarm,S99); // check and start alarm
+    //Brightness Menu
     S9->addTransition(&returnToClockDisplay,S0); //After timeout
     S9->addTransition(&returnToMainMenu,S2);
-    S10->addTransition(&returnToClockDisplay,S0); //After timeout
-    S10->addTransition(&returnToMainMenu,S2);
-    S11->addTransition(&returnToClockDisplay,S0); //After timeout
-	S4->addTransition(&startAlarm,S99); // check and start alarm
-    S5->addTransition(&returnToMainMenu,S2);
-	//S5->addTransition(&startAlarm,S99); // check and start alarm
-    S6->addTransition(&returnToMainMenu,S2);
-	//S6->addTransition(&startAlarm,S99); // check and start alarm
-    S7->addTransition(&returnToMainMenu,S2);
-	//S7->addTransition(&startAlarm,S99); // check and start alarm
-    S8->addTransition(&returnToMainMenu,S2);
-	//S8->addTransition(&startAlarm,S99); // check and start alarm
-    S9->addTransition(&returnToMainMenu,S2);
 	//S9->addTransition(&startAlarm,S99); // check and start alarm
-    S10->addTransition(&returnToMainMenu,S2);
+    //Homing Menu
+    S10->addTransition(&returnToClockDisplay,S0); //After timeout
+    S10->addTransition(&anyButtonPressed,S2);
 	//S10->addTransition(&startAlarm,S99); // check and start alarm
-    S11->addTransition(&returnToMainMenu,S2);
+    //Credits Menu
+    S11->addTransition(&returnToClockDisplay,S0); //After timeout
+	S11->addTransition(&anyButtonPressed,S2);
 	//S11->addTransition(&startAlarm,S99); // check and start alarm
-    S11->addTransition(&attachUnhandledInterrupts,S11);
 
 	// Stop alarm and return to clock
 	S99->addTransition(&stopAlarm,S2);
-	S99->addTransition(&attachUnhandledInterrupts,S99);
+	S99->addTransition(&reAttachUnhandledInterrupts,S99);
 	
     // TFT setup
     delay(500);
     tft.begin();
     tft.setTextColor(COLOR_TXT);
-    tft.setTextSize(2);
     tft.setRotation(3);
     tft.fillScreen(COLOR_BKGND);
-    tft.setFont(&FreeSans12pt7b);
+    set_default_font();
     canvasClock.setFont(&FreeSans18pt7b);
     canvasClock.setTextSize(2);
     canvasDate.setFont(&FreeSans12pt7b);
@@ -385,35 +389,6 @@ void setup(void) {
     readAlarms(ALARM2, alm2);
     stepper.setStep(read16bit(C_STEP));
     
-    /*tft.setFont(&FreeSans12pt7b);
-    /*for (int i = 0; i < 100; i = i+11){
-        sprintf(timeString, "%02d", i);
-        tft.getTextBounds("Sonntag", 20, 140, &x, &y, &w, &h);
-        Serial.print("Sonntag");
-        Serial.print(" ");
-        Serial.print(x);
-        Serial.print(" ");
-        Serial.print(y);
-        Serial.print(" ");
-        Serial.print(w);
-        Serial.print(" ");
-        Serial.println(h);
-    /*}*/
-
-   /* tft.drawBitmap(121, 138, canvasClock.getBuffer(), 76, 54, ILI9341_WHITE, ILI9341_RED);
-    tft.drawBitmap(211, 138, canvasClock.getBuffer(), 76, 54, ILI9341_WHITE, ILI9341_RED);
-    /*tft.fillRect(107,138,1,40,ILI9341_WHITE);
-    tft.fillRect(108,138,1,40,ILI9341_RED);
-    tft.fillRect(109,138,1,40,ILI9341_WHITE);
-    tft.fillRect(110,138,1,40,ILI9341_RED);
-    tft.fillRect(111,138,1,40,ILI9341_WHITE);
-    tft.fillRect(116,138,1,40,ILI9341_WHITE);
-    tft.fillRect(117,138,1,40,ILI9341_RED);
-    tft.fillRect(118,138,1,40,ILI9341_WHITE);
-    tft.fillRect(119,138,1,40,ILI9341_RED);
-    tft.fillRect(120,138,1,40,ILI9341_BLACK);*/
-	
-	
     // Buttons interrupt setup
     pinMode(BTN_C, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -421,6 +396,7 @@ void setup(void) {
     attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
     pinMode(BTN_L, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+    update_temperature();
 }
 
 void loop()
@@ -484,50 +460,9 @@ void loop()
     }
 }
 
-
-void correct_date(int16_t *date){
-    // Check the date and correct based on calendar
-    // Date must be an array with 1st entry hour, than minute, day, month, year
-    
-    // Check if leap year
-    int leapyear = 0;
-    if (!(date[4] % 4)){
-        leapyear = 1;
-    }
-    // Check month overflow
-    date[3] = date[3] % 12;
-    // check correct number of days for month
-    // Begin with month with 31 days
-    if (date[3]==0 || date[3]==2 || date[3]==4 || date[3]==6 || date[3]==7 || date[3]==9 || date[3]==11){
-        while (date[2] < 0){
-            date[2] = 31 + date[2]; 
-        }
-        date[2] = date[2] % 31; 
-    }
-    // Month with 30 days
-    if (date[3]==3 || date[3]==5 || date[3]==8 || date[3]==10){
-        while (date[2] < 0){
-            date[2] = 30 + date[2]; 
-        }
-        date[2] = date[2] % 30;
-    }
-    // February
-    if (date[3]==1){
-        while (date[2] < 0){
-            date[2] = 28 + leapyear + date[2]; 
-        }
-        date[2] = date[2] % (28 + leapyear);
-    }
-    // Correct hour over and underflow
-    while (date[0] < 0){
-        date[0] = date[0] + hours_per_day; 
-    }
-    date[0] = date[0] % hours_per_day;
-    // Correct minute over and underflow
-    while (date[1] < 0){
-        date[1] = date[1] + 60; 
-    }
-    date[1] = date[1] % 60;
+void set_default_font(){
+    tft.setFont(&FreeSans18pt7b);
+    tft.setTextSize(1);
 }
 
 //StateMachine States
@@ -632,26 +567,16 @@ void stateAlarmActive()
 void stateMainMenu()
 {
     if (updateScreen) {
-        updateScreen = false;
-        // Draw Top Icons
-        drawMenuSetter(true);
-        cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
-        tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
-        cursorY = cursorY + MENULINEWIDTH+CANVAS_FONT_MARGIN+FONTSIZE_NORMAL_HEIGHT;
-        // Write Center Entry
-        tft.getTextBounds("MainMenu", 0, cursorY, &x1, &y1, &w1, &h1);
-        cursorX = (uint8_t) ((TFT_WIDTH - TFT_MARGIN_LEFT - TFT_MARGIN_RIGHT - w1) / 2);
-        tft.setCursor(cursorX, cursorY);
-        tft.println("MainMenu");      
-        tft.fillRect(0,y1+h1+2,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT); 
-        
-        
+        updateScreen = false;        
+        drawMenuTop("Main Menu");
         updateMenuSelection = true;
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     if (updateMenuSelection){
-        cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y+2*MENULINEWIDTH+3*CANVAS_FONT_MARGIN+FONTSIZE_NORMAL_HEIGHT;
+        cursorY = cursorYMenuStart;
         for (int i=0; i<MENU_ITEMS; i++){
+            sprintf(outString, "Item %d: %d", i, ((selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS));
+            Serial.println(outString);
             canvasMenuItem.fillScreen(COLOR_BKGND);
             canvasMenuItem.setCursor(0,CANVAS_FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
             canvasMenuItem.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
@@ -659,6 +584,22 @@ void stateMainMenu()
             cursorY = cursorY + canvasMenuItem.height();
         }
     }
+}
+
+void drawMenuTop(char *menuName)
+{
+    // Draw Top Icons
+    drawMenuSetter(true);
+    cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
+    tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+    cursorY = cursorY + MENULINEWIDTH+CANVAS_FONT_MARGIN+FONTSIZE_SMALL_HEIGHT+2;
+    // Write Center Entry
+    tft.getTextBounds(menuName, 0, cursorY, &x1, &y1, &w1, &h1);
+    cursorX = (uint8_t) ((TFT_WIDTH - TFT_MARGIN_LEFT - TFT_MARGIN_RIGHT - w1) / 2);
+    tft.setCursor(cursorX, cursorY);
+    tft.println(menuName);      
+    tft.fillRect(0,y1+h1+6,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT); 
+    cursorYMenuStart = y1+h1+6+MENULINEWIDTH+6;
 }
 
 //S3
@@ -677,31 +618,39 @@ void stateClockMenu()
 {
     if (updateScreen) {
         updateScreen = false;
-        tft.setCursor(100,40);
-        //tft.setFont(&FreeSans12pt7b);
-        tft.println("Clock");
-        tft.drawFastHLine(0,50,TFT_WIDTH,COLOR_TXT);
-        tft.fillCircle(15,145,7,COLOR_TXT);
-        tft.setCursor(40,100);
-        tft.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1)%MAINMENU_ITEMS]);
-        tft.setCursor(40,160);
-        tft.println(mainMenuEntries[selectedMMItem]);
-        tft.setCursor(40,220);
-        tft.println(mainMenuEntries[(selectedMMItem+1)%MAINMENU_ITEMS]);
-        
+        updateMenuSelection = true;
     }
+    if (updateMenuSelection){
+        updateMenuSelection = false;
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        drawClock(canvasMenuItem, submenu.item[0], submenu.item[1], cursorX, cursorY, 0);      
+        cursorY = cursorY + canvasMenuItem.height();
+        updateCanvasDate(canvasMenuItem, submenu.item[2], submenu.item[3], submenu.item[4], 0);
+        tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
+    }
+    
     //Manually set time
     //Set Light Interval
     //Set Motor Interval
     //clockDisplay(isrTime);
 }
 
+
+void drawAlarmMenu(){
+
+}
+
 //S5
 void stateAlarm1Menu()
 {
     if (updateScreen) {
-        updateScreen = false;
+        updateScreen = false;        
+        drawMenuTop("Alarm 1 Menu");
+        updateMenuSelection = true;
+        tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
+    drawAlarmMenu();
     //Set Alarm1
     //Select Alarm Sound
     //Select if lights should be on
@@ -711,8 +660,12 @@ void stateAlarm1Menu()
 void stateAlarm2Menu()
 {
     if (updateScreen) {
-        updateScreen = false;
+        updateScreen = false;        
+        drawMenuTop("Alarm 2 Menu");
+        updateMenuSelection = true;
+        tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
+    drawAlarmMenu();
     //Set Alarm2
     //Select Alarm Sound
     //Select if lights should be on
@@ -723,6 +676,7 @@ void stateSoundMenu()
 {
     if (updateScreen) {
         updateScreen = false;
+        drawNotImplementedMessage();
     }
     //Set Volume 0 - 30
 
@@ -731,6 +685,10 @@ void stateSoundMenu()
 //S8
 void stateLighthouseMenu()
 {
+    if (updateScreen) {
+        updateScreen = false;
+        drawNotImplementedMessage();
+    }
     //Lighthouse Settings for normal clock mode
     //Motor Settings
     //Main Light Settings
@@ -739,6 +697,10 @@ void stateLighthouseMenu()
 //S9
 void stateBrightnessMenu()
 {
+    if (updateScreen) {
+        updateScreen = false;
+        drawNotImplementedMessage();
+    }
     //Brightness Setting for Display
     //MainLED?
 }
@@ -746,38 +708,41 @@ void stateBrightnessMenu()
 //S10
 void stateHomingMenu()
 {
+    if (updateScreen) {
+        updateScreen = false;
+        drawNotImplementedMessage();
+    }
     //Motor Homing Procedure
 }
 
 //S11
 void stateCreditsMenu()
 {
-    //Display Credits on Lighthouse OS
-    //Turn on Main Lights and Motor
+    if (updateScreen) {
+        updateScreen = false;   
+        tft.setFont(&FreeSans12pt7b);
+        tft.setTextSize(1);
+        tft.setCursor(0, cursorYMenuStart+FONTSIZE_TINY_HEIGHT);
+        tft.println("  Not All Who Wander");
+        tft.println("  Are Lost!");
+        //tft.setFont();
+        //tft.setTextSize(2);
+        //tft.println(" ");
+        tft.setFont(&FreeSans12pt7b);
+        tft.setTextSize(1);
+        tft.println("  Frauke, Christian, Hans &");
+        tft.println("  Ben");
+        set_default_font();
+        //ToDo Turn on Main Lights and Motor
+    }
 }
 
 //StateMachine Transitions
 ///////////////////////////////////////////////
-bool openMainMenu()
-{
-    if (isrbuttonC) {
-      isrbuttonC = false;
-      sleepTimer = millis();
-      clearTFT();
-      currentMenu = MAINMENU_ITEMS;
-      selectedMMItem = 0;
-      delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-      return true;
-    }
-    return false;
-}
-
 bool toSleep()
 {
     if (millis() - sleepTimer >  + sleepDelay) {
         analogWrite(TFT_LITE, 0);
-        currentMenu = -1;
         return true;
     }
     return false;
@@ -785,13 +750,12 @@ bool toSleep()
 
 bool wakeup()
 {
-    if (isrbuttonC||isrButtonR||isrButtonL) {
+    if (isrButtonC||isrButtonR||isrButtonL) {
       // Following section uncommented to save pressed buttons after WakeUP
-      //isrbuttonC = false;
+      //isrButtonC = false;
       //isrButtonR = false;
       //isrButtonL = false;
       sleepTimer = millis();
-      currentMenu = -1;
       isrTimeUpdate = true;
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -803,12 +767,63 @@ bool wakeup()
     return false;
 }
 
+bool openMainMenu()
+{
+    if (isrButtonC) {
+      isrButtonC = false;
+      sleepTimer = millis();
+      clearTFT();
+      selectedMMItem = MAINMENU_ITEMS-1;
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+      return true;
+    }
+    return false;
+}
+
+bool changeMainMenuSelection()
+{
+    if(isrButtonR){
+        isrButtonR = false;
+        updateMenuSelection = true;
+        selectedMMItem = (selectedMMItem+1)%MAINMENU_ITEMS;
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+        return true;
+    }
+    if(isrButtonL){
+        isrButtonL = false;
+        updateMenuSelection = true;
+        selectedMMItem = (selectedMMItem+MAINMENU_ITEMS-1)%MAINMENU_ITEMS;
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+        return true;
+    }
+    return false;
+}
+
+bool closeMainMenu()
+{
+    if (isrButtonC) {
+      if (selectedMMItem == (MAINMENU_ITEMS-1)) {
+          sleepTimer = millis();
+          isrButtonC = false;
+          clearTFT();
+          prepareClock();
+          isrTimeChange = true; // to enable clock display
+          delay(50);
+          attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+          return true;
+          }
+    }
+    return false;
+}
+
 // Stop alarm when pressing L-Button
 bool stopAlarm()
 {
 	if (isrButtonL) {			// Stop-Alam button was pressed
       isrButtonL = false;		// Reset Btn-flag
-      currentMenu = -1;			// No menu will be active
       isrTimeUpdate = true;		// ??
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
@@ -841,51 +856,27 @@ bool startAlarm()
 	return false;
 }
 
-bool changeMenuSelection()
-{
-    int noItems = 0;
-    switch (currentMenu) {
-      case MAINMENU_ITEMS: noItems = MAINMENU_ITEMS;
-    }
-    if(isrButtonR){
-        isrButtonR = false;
-        updateMenuSelection = true;
-        selectedMMItem = (selectedMMItem+1)%noItems;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-        return true;
-    }
-    if(isrButtonL){
-        isrButtonL = false;
-        updateMenuSelection = true;
-        selectedMMItem = (selectedMMItem+noItems-1)%noItems;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-        return true;
-    }
-    return false;
-}
 
 bool returnToClockDisplay()
 {
-
-     if (millis() > sleepTimer + sleepDelay){
+    if (millis() > sleepTimer + sleepDelay){
         sleepTimer = millis();
         clearTFT();
         prepareClock();
-        currentMenu = -1;
         isrTimeChange = true; // to enable clock display
         return true;
     }   
     return false;
 }
 
+//////////////////////
+// Begin Section for SubMenus
+//
 bool returnToMainMenu()
 {   
-    if (isrbuttonC  && (submenu.selectedItem == 0)){
+    if (isrButtonC  && (submenu.selectedItem == submenu.num_items)){
         sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = MAINMENU_ITEMS;
+        isrButtonC = false;
         clearTFT();
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -894,30 +885,116 @@ bool returnToMainMenu()
     return false;
 }
 
-bool openClockMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 0)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        submenu.item[0] = hour(isrTime);
-        submenu.item[1] = minute(isrTime);
-        submenu.item[2] = day(isrTime);
-        submenu.item[3] = month(isrTime);
-        submenu.item[4] = year(isrTime);
-        clearTFT();
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+bool openClockMenu(){
+    if (isrButtonC  && (selectedMMItem == 0)){
+        openSuBMenu();
         return true;   
     }
     return false;
 }
 
-bool changeClockMenuSelection()
+bool openAlarm1Menu()
 {
-    if (isrbuttonC){
-        isrbuttonC = false;
+    if (isrButtonC  && (selectedMMItem == 1)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openAlarm2Menu()
+{
+    if (isrButtonC  && (selectedMMItem == 2)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openSoundMenu()
+{
+    if (isrButtonC  && (selectedMMItem == 3)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openLighthouseMenu()
+{
+    if (isrButtonC  && (selectedMMItem == 4)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openBrigthnessMenu()
+{
+    if (isrButtonC  && (selectedMMItem == 5)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openHomingMenu()
+{
+    if (isrButtonC  && (selectedMMItem == 6)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+bool openCreditsMenu()
+{
+    if (isrButtonC  && (selectedMMItem == 7)){
+        openSuBMenu();
+        return true;   
+    }
+    return false;
+}
+
+void openSuBMenu()
+{
+    sleepTimer = millis();
+    isrButtonC = false;
+    // Init
+    
+    submenu.dateinfo_starts = -1;
+    submenu.timeinfo_starts = -1;
+    for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
+        submenu.maxVal[i] = 0;
+        submenu.minVal[i] = 0;
+    }
+    switch (selectedMMItem){
+        case 0:
+            //ClockMenu
+            submenu.num_items = 5;
+            submenu.dateinfo_starts = 0;
+            submenu.item[0] = hour(isrTime);
+            submenu.item[1] = minute(isrTime);
+            submenu.item[2] = day(isrTime);
+            submenu.item[3] = month(isrTime);
+            submenu.item[4] = year(isrTime);
+            break;
+        case 8:
+            //Credits
+            submenu.num_items = 0;
+    }
+    // Begin with selection of last item, which should be save and exit
+    submenu.selectedItem = submenu.num_items;
+    clearTFT();
+    drawMenuTop(mainMenuEntries[selectedMMItem]);
+    delay(50);
+    attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+}
+
+bool changeSubMenuSelection()
+{
+    if (isrButtonC){
+        isrButtonC = false;
         submenu.selectedItem = (submenu.selectedItem + 1) % 6;
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -937,124 +1014,81 @@ bool changeClockMenuSelection()
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
     }
-    // Correct date after input
-    correct_date(submenu.item);
+    // Correct date if enabled for this submenu
+    if (submenu.dateinfo_starts >=0){
+        correct_date(submenu.item + submenu.dateinfo_starts);
+    }
+    // Correct time if enabled for this submenu
+    if (submenu.timeinfo_starts >=0){
+        correct_time(submenu.item + submenu.timeinfo_starts);
+    }
+    // Check Max Value
+    if (submenu.maxVal[submenu.selectedItem]){
+        if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
+            submenu.item[submenu.selectedItem] = submenu.maxVal[submenu.selectedItem];
+        }
+        submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem] %  (submenu.maxVal[submenu.selectedItem]+1);
+    }
+    // Check Min Value
+    else{
+        if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
+            submenu.item[submenu.selectedItem] = submenu.minVal[submenu.selectedItem];
+        }
+    }
 }
 
-bool openAlarm1Menu()
-{
-    if (isrbuttonC  && (selectedMMItem == 1)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
+void correct_date(int16_t *date){
+    // Check the date and correct based on calendar
+    // date must be an array with 1st entry hour, than minute, day, month, year
+    
+    // Check if leap year
+    int leapyear = 0;
+    if (!(date[4] % 4)){
+        leapyear = 1;
     }
-    return false;
+    // Check month overflow
+    date[3] = date[3] % 12;
+    // check correct number of days for month
+    // Begin with month with 31 days
+    if (date[3]==0 || date[3]==2 || date[3]==4 || date[3]==6 || date[3]==7 || date[3]==9 || date[3]==11){
+        while (date[2] < 0){
+            date[2] = 31 + date[2]; 
+        }
+        date[2] = date[2] % 31; 
+    }
+    // Month with 30 days
+    if (date[3]==3 || date[3]==5 || date[3]==8 || date[3]==10){
+        while (date[2] < 0){
+            date[2] = 30 + date[2]; 
+        }
+        date[2] = date[2] % 30;
+    }
+    // February
+    if (date[3]==1){
+        while (date[2] < 0){
+            date[2] = 28 + leapyear + date[2]; 
+        }
+        date[2] = date[2] % (28 + leapyear);
+    }
+    // Correct hour over and underflow
+    correct_time(date);
 }
 
-bool openAlarm2Menu()
-{
-    if (isrbuttonC  && (selectedMMItem == 2)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
+void correct_time(int16_t *dtime){
+    // Check the time for over and underflows
+    // date must be an array with 1st entry hour, than minute
+    
+    while (dtime[0] < 0){
+        dtime[0] = dtime[0] + hours_per_day; 
     }
-    return false;
+    dtime[0] = dtime[0] % hours_per_day;
+    // Correct minute over and underflow
+    while (dtime[1] < 0){
+        dtime[1] = dtime[1] + 60; 
+    }
+    dtime[1] = dtime[1] % 60;
 }
 
-bool openSoundMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 3)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
-    }
-    return false;
-}
-
-bool openLighthouseMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 4)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
-    }
-    return false;
-}
-
-bool openBrigthnessMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 5)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
-    }
-    return false;
-}
-
-bool openHomingMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 6)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        submenu.selectedItem = 0;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
-    }
-    return false;
-}
-
-bool closeMainMenu()
-{
-    if (isrbuttonC) {
-      if (selectedMMItem == 7) {
-          sleepTimer = millis();
-          isrbuttonC = false;
-          clearTFT();
-          prepareClock();
-          currentMenu = -1;
-          isrTimeChange = true; // to enable clock display
-          delay(50);
-          attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-          return true;
-          }
-    }
-    return false;
-}
-
-bool openCreditsMenu()
-{
-    if (isrbuttonC  && (selectedMMItem == 8)){
-        sleepTimer = millis();
-        isrbuttonC = false;
-        currentMenu = selectedMMItem;
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        return true;   
-    }
-    return false;
-}
 
 bool changeToWeddingMode()
 {
@@ -1070,7 +1104,34 @@ bool exitWeddingMode()
     return false;
 }
 
-bool attachUnhandledInterrupts()
+bool anyButtonPressed()
+{
+    bool buttonPressed = false;
+    if(isrButtonR){
+        isrButtonR = false;    
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+        buttonPressed = true;
+    }
+    if(isrButtonL){
+        isrButtonL = false;    
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+        buttonPressed = true;
+    }
+    if(isrButtonC){
+        isrButtonC = false;    
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
+        buttonPressed = true;
+    }
+    if (buttonPressed){
+        clearTFT();
+        return true;
+    }
+}
+
+bool reAttachUnhandledInterrupts()
 {
     if(isrButtonR){
         isrButtonR = false;    
@@ -1082,10 +1143,10 @@ bool attachUnhandledInterrupts()
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
     }
-    if(isrButtonR){
-        isrButtonR = false;    
+    if(isrButtonC){
+        isrButtonC = false;    
         delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+        attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
     }
     return true;
 }
@@ -1115,6 +1176,18 @@ void updateClock()
     myRTC.alarm(ALARM_2);
 }
 
+void updateCanvasText(GFXcanvas1& cCanvas, char *text, bool underline)
+{
+    cCanvas.fillScreen(COLOR_BKGND);
+    cCanvas.setCursor(0, cCanvas.height()-CANVAS_FONT_MARGIN-MENULINEWIDTH);
+    cCanvas.println(text);
+    if (underline)
+    {
+        cCanvas.getTextBounds(text, 0, cCanvas.height()-CANVAS_FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
+        cCanvas.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
+    }
+}
+
 void updateCanvasClock(GFXcanvas1& cCanvas, uint8_t cDigit, bool underline)
 {
     sprintf(timeString,"%02d",cDigit);
@@ -1126,7 +1199,6 @@ void updateCanvasClock(GFXcanvas1& cCanvas, uint8_t cDigit, bool underline)
         cCanvas.getTextBounds(timeString, 0, cCanvas.height()-CANVAS_FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
         cCanvas.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
     }
-
 }
 
 void updateCanvasDate(GFXcanvas1& cCanvas, uint8_t cDay, uint8_t cMonth, uint16_t cYear, uint8_t underline)
@@ -1167,6 +1239,22 @@ void updateCanvasDate(GFXcanvas1& cCanvas, uint8_t cDay, uint8_t cMonth, uint16_
     }
 }
 
+
+void drawClock(GFXcanvas1& cCanvas, uint8_t cHour, uint8_t cMinute, int16_t xPos, int16_t yPos, uint8_t underline)
+{
+    cCanvas.fillScreen(COLOR_BKGND);
+       
+    updateCanvasClock(cCanvas, cHour, (bool)(underline & 1));
+    drawClockItems(cCanvas, xPos, yPos, 0);
+
+    cCanvas.setCursor(0, cCanvas.height()-CANVAS_FONT_MARGIN-MENULINEWIDTH);
+    cCanvas.println(":");
+    drawClockItems(cCanvas, xPos, yPos, 1);
+
+    updateCanvasClock(cCanvas, cMinute, (bool)(underline & 2));
+    drawClockItems(cCanvas, xPos, yPos, 2);
+}
+
 void updateCanvasMenuSetter(int signtype)
 {
     canvasMenuLR.fillScreen(COLOR_BKGND);
@@ -1205,11 +1293,13 @@ void drawClockItems(GFXcanvas1& cCanvas, int16_t xPos, int16_t yPos, uint8_t clo
             xPos = xPos; // Hour
             break;
         case 1:
-            xPos = xPos + cCanvas.width() + CANVAS_FONT_MARGIN; // :-Sign
+            cCanvas.getTextBounds("88", 0, cCanvas.height(), &x1, &y1, &w1, &h1);
+            xPos = xPos + x1 + w1 + CANVAS_FONT_MARGIN; // :-Sign
             break;
         case 2: 
-            cCanvas.getTextBounds(":", 0, cCanvas.height(), &x1, &y1, &w1, &h1);
-            xPos = xPos  + cCanvas.width() + x1 + w1 + 3 * CANVAS_FONT_MARGIN;    // Minute
+            cCanvas.getTextBounds("88", 0, cCanvas.height(), &x1, &y1, &w1, &h1);
+            cCanvas.getTextBounds(":", 0, cCanvas.height(), &x2, &y2, &w2, &h2);
+            xPos = xPos  + x1 + w1 + x2 + w2 +  CANVAS_FONT_MARGIN;    // Minute
             break;
     }
     tft.drawBitmap(xPos, yPos, cCanvas.getBuffer(), cCanvas.width(), cCanvas.height(), COLOR_TXT, COLOR_BKGND);
@@ -1261,6 +1351,13 @@ void clockDisplay(time_t t)
     }
 }
 
+void drawNotImplementedMessage(){
+    tft.setFont();
+    tft.setCursor(0, cursorYMenuStart);
+    tft.setTextSize(2);
+    tft.println("Hey Thomas, stellt sich raus du bist nicht einzige mit einem Deadline-Problem. Tja, stellt sich raus wir koennen es nicht loesen! Dieses Problem bleibt also bei dir! :-)");
+    set_default_font();
+}
 
 // read temperature from RTC:
 void update_temperature(){
@@ -1300,7 +1397,7 @@ void isrChangeTime()
 void buttonC()
 {
     detachInterrupt(digitalPinToInterrupt(BTN_C));
-    isrbuttonC = true;
+    isrButtonC = true;
 }
 
 void buttonR()
@@ -1336,8 +1433,8 @@ void setAlarmMenu (uint16_t address)
 /*bool setAlarms ()
 {
     
-    if (isrbuttonC) {
-      isrbuttonC = false;
+    if (isrButtonC) {
+      isrButtonC = false;
       sleepTimer = millis();
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
