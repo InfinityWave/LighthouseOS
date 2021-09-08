@@ -35,10 +35,11 @@
 #define BTN_R 6           //interrupt
 
 //LED pins
-#define LED_BTN_C 
-#define LED_BTN_R
-#define LED_BTN_L
-#define LED_MAIN          //PWM pin
+#define LED_BTN_C 0        //TODO Button LED
+#define LED_BTN_R 0        //TODO Button LED
+#define LED_BTN_L 0        //TODO Button LED
+#define LED_MAIN 0         //TODO PWM pin
+#define ALARM_LIGHT_MAX 0  //TODO Set
 
 // stepper pins
 #define STEP_IN1 A0
@@ -137,7 +138,7 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+CANVAS_FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
 GFXcanvas1 canvasMenuItem(160, FONTSIZE_SMALL_HEIGHT+4*CANVAS_FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
-GFXcanvas1 canvasTinyFont(250, FONTSIZE_TINY_HEIGHT+3*CANVAS_FONT_MARGIN);
+GFXcanvas1 canvasTinyFont(220, FONTSIZE_TINY_HEIGHT+3*CANVAS_FONT_MARGIN);
 GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
 
 //Variables to store size of display/canvas texts
@@ -148,6 +149,9 @@ uint16_t w2, h2;
 int16_t cursorX, cursorY;
 
 
+
+// Define StateMachine
+/////////////////////////////////////////////////////////////
 StateMachine machine = StateMachine();
 
 State* S0 = machine.addState(&stateClockDisplay);
@@ -163,6 +167,10 @@ State* S9 = machine.addState(&stateBrightnessMenu);
 State* S10 = machine.addState(&stateHomingMenu);
 State* S11 = machine.addState(&stateCreditsMenu);
 
+State* S99 = machine.addState(&stateAlarmActive); // State for active alarm
+
+// Define Clock-HW
+////////////////////////////////////////////////////////////
 DS3232RTC myRTC(false);
 
 DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
@@ -170,6 +178,7 @@ DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C();
 
 CheapStepper stepper (STEP_IN1, STEP_IN2, STEP_IN3, STEP_IN4); 
+
 
 volatile time_t isrTime;
 volatile bool isrTimeChange;
@@ -206,9 +215,15 @@ bool updateMenuSelection = false;
 bool updateClockSign = false;
 bool changeValue = false;
 
-//stepper variables
+// Alarm variables
+uint32_t alarmLightDelay = 1000;
+uint32_t alarmLightTimer = 0;
+bool alarmLightOn = false;
+
+// Stepper and tower variables
 bool moveTower = true;
 bool stepperActive = false;
+uint16_t towerPosOffset = 0; // 0 o'clock light position (homing)
 
 //display variable
 uint8_t brightness = LITE;
@@ -221,6 +236,8 @@ struct alarms {
     bool act;
     bool light;
     uint8_t soundfile;
+    time_t nextAlarm; // Time stamp of next alarm
+	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
 
 // settings
@@ -242,6 +259,10 @@ void setup(void) {
     pinMode(TFT_LITE, OUTPUT);
     analogWrite(TFT_LITE, brightness);
 
+    // setup tower LED
+    pinMode(LED_MAIN, OUTPUT);
+    analogWrite(LED_MAIN, 0);		
+
     //stepper setup
     stepper.setRpm(STEP_RPM);
 
@@ -254,9 +275,11 @@ void setup(void) {
     S0->addTransition(&toSleep,S1);         // to standby
     S0->addTransition(&openMainMenu,S2);    // to main menu
     S0->addTransition(&changeToWeddingMode,S3); //start wedding mode
+	//S0->addTransition(&startAlarm,S99); // check and start alarm
     S0->addTransition(&attachUnhandledInterrupts,S0);   //Must be last item
     // from standby
     S1->addTransition(&wakeup,S0);          // to clock
+	//S1->addTransition(&startAlarm,S99); // check and start alarm
     // from main menu
     S2->addTransition(&returnToClockDisplay,S0); //After timeout
     S2->addTransition(&closeMainMenu,S0);   // to clock
@@ -269,6 +292,7 @@ void setup(void) {
     S2->addTransition(&openBrigthnessMenu,S9);
     S2->addTransition(&openHomingMenu,S10);
     S2->addTransition(&openCreditsMenu,S11);
+	//S2->addTransition(&startAlarm,S99); // check and start alarm
     //S2->addTransition(&attachUnhandledInterrupts,S2);   //Must be last item
     // from wedding mode
     S3->addTransition(&exitWeddingMode,S0);
@@ -289,9 +313,27 @@ void setup(void) {
     S10->addTransition(&returnToClockDisplay,S0); //After timeout
     S10->addTransition(&returnToMainMenu,S2);
     S11->addTransition(&returnToClockDisplay,S0); //After timeout
+	S4->addTransition(&startAlarm,S99); // check and start alarm
+    S5->addTransition(&returnToMainMenu,S2);
+	//S5->addTransition(&startAlarm,S99); // check and start alarm
+    S6->addTransition(&returnToMainMenu,S2);
+	//S6->addTransition(&startAlarm,S99); // check and start alarm
+    S7->addTransition(&returnToMainMenu,S2);
+	//S7->addTransition(&startAlarm,S99); // check and start alarm
+    S8->addTransition(&returnToMainMenu,S2);
+	//S8->addTransition(&startAlarm,S99); // check and start alarm
+    S9->addTransition(&returnToMainMenu,S2);
+	//S9->addTransition(&startAlarm,S99); // check and start alarm
+    S10->addTransition(&returnToMainMenu,S2);
+	//S10->addTransition(&startAlarm,S99); // check and start alarm
     S11->addTransition(&returnToMainMenu,S2);
+	//S11->addTransition(&startAlarm,S99); // check and start alarm
     S11->addTransition(&attachUnhandledInterrupts,S11);
 
+	// Stop alarm and return to clock
+	S99->addTransition(&stopAlarm,S2);
+	S99->addTransition(&attachUnhandledInterrupts,S99);
+	
     // TFT setup
     delay(500);
     tft.begin();
@@ -323,7 +365,7 @@ void setup(void) {
     myRTC.alarmInterrupt(ALARM_2, true);
     attachInterrupt(digitalPinToInterrupt(DS3231_INT), isrChangeTime, FALLING);
     isrTimeChange = true;
-    //myRTC.set(1577836800);
+    //myRTC.set(1631107034);
     updateClock();
     if(isrTime > 0)
         Serial.println("RTC has set the system time");
@@ -370,6 +412,8 @@ void setup(void) {
     tft.fillRect(118,138,1,40,ILI9341_WHITE);
     tft.fillRect(119,138,1,40,ILI9341_RED);
     tft.fillRect(120,138,1,40,ILI9341_BLACK);*/
+	
+	
     // Buttons interrupt setup
     pinMode(BTN_C, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -381,13 +425,11 @@ void setup(void) {
 
 void loop()
 {
+	// Time from RTC
     if (isrTimeChange) {
         updateClock();
     }
-    if (checkAlarms()) {
-        // refine this
-        Serial.println("ALAAAARM!!!");
-    }
+	// Time from DCF
     if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
         DCF.Start();
         digitalWrite(DCF_EN_PIN, LOW);
@@ -420,7 +462,14 @@ void loop()
         Serial.print(":");
         Serial.println(minute(isrTime));
     }
+    sprintf(outString, "RTC Time: %d", myRTC.get());
+	Serial.println(outString);
+	// Run interface
+	//////////////////////////
+	// StateMachine
     machine.run();
+	// Show time via tower light
+	//updateTowerLight(isrTime);
     stepper.run();
     if (moveTower) {
         stepper.run();
@@ -478,8 +527,8 @@ void correct_date(int16_t *date){
 }
 
 //StateMachine States
-//S0
-// main clock display
+////////////////////////////////////////////////////////////
+//S0 = main clock display
 void stateClockDisplay()
 {
     if (updateScreen) {
@@ -496,6 +545,24 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
+	if (isrButtonR) {							// Light button was pressed
+      isrButtonR = false;						// Reset Btn-flag
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+	  alarmLightOn = true; 						// Turn on light flag
+	  analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch tower light
+	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+	  alarmLightTimer = millis();				// (Re-)Start timer
+    }
+	if (millis() > alarmLightTimer + alarmLightDelay){ // Time is up...
+		alarmLightOn = false; 						// Turn on light flag
+		analogWrite(LED_MAIN, 0);					// Switch tower light
+		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
+		digitalWrite(LED_BTN_R, LOW);				// Switch btn LEDs off
+		digitalWrite(LED_BTN_L, LOW);				// Switch btn LEDs off
+	}
 }
 
 void drawClockDisplayInfo(){
@@ -535,6 +602,25 @@ void stateStandby()
         isrTimeUpdate = false;
         clockDisplay(isrTime);
     }
+}
+
+// S99 = Active alarm
+void stateAlarmActive()
+{
+	if (isrTimeUpdate) {
+        isrTimeUpdate = false;
+        clockDisplay(isrTime);
+        analogWrite(TFT_LITE, brightness);
+	}
+	if (millis() > alarmLightTimer + alarmLightDelay) {
+		alarmLightTimer = millis();								// Restart timer
+		alarmLightOn = not alarmLightOn;						// Switch state of light
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+	}
+		/////////////////////////////////////
+		// TODO
+		// Make sure MP3 is running
+		/////////////////////////////////////
 }
 
 //S1
@@ -665,6 +751,8 @@ void stateCreditsMenu()
     //Turn on Main Lights and Motor
 }
 
+//StateMachine Transitions
+///////////////////////////////////////////////
 bool openMainMenu()
 {
     if (isrbuttonC) {
@@ -707,6 +795,44 @@ bool wakeup()
       return true;
     }
     return false;
+}
+
+// Stop alarm when pressing L-Button
+bool stopAlarm()
+{
+	if (isrButtonL) {			// Stop-Alam button was pressed
+      isrButtonL = false;		// Reset Btn-flag
+      currentMenu = -1;			// No menu will be active
+      isrTimeUpdate = true;		// ??
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+	  analogWrite(LED_MAIN, 0); // Switch off tower light
+	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
+	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
+	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
+	  /////////////////////////////////////
+	  // TODO
+	  // Stop MP3-Player
+	  /////////////////////////////////////
+      return true;
+    }
+    return false;
+}
+
+// Start alamr when time has come
+bool startAlarm()
+{
+	if (checkAlarms()) {
+		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
+		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
+		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+		/////////////////////////////////////
+		// TODO
+		// Start MP3-Player
+		/////////////////////////////////////
+		return true;
+    }
+	return false;
 }
 
 bool changeMenuSelection()
@@ -808,7 +934,6 @@ bool changeClockMenuSelection()
     // Correct date after input
     correct_date(submenu.item);
 }
-
 
 bool openAlarm1Menu()
 {
@@ -959,6 +1084,8 @@ bool attachUnhandledInterrupts()
     return true;
 }
 
+// Clock and Display stuff
+////////////////////////////////////////////////////////
 void clearTFT()
 {
     tft.fillScreen(COLOR_BKGND);
@@ -1065,7 +1192,6 @@ void drawMenuSetter(bool isOn)
     tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE-CENTER_ICON_LW, COLOR_BKGND);
 }
 
-
 void drawClockItems(GFXcanvas1& cCanvas, int16_t xPos, int16_t yPos, uint8_t clock_item)
 {
     switch (clock_item){
@@ -1100,6 +1226,8 @@ void clockDisplay(time_t t)
         drawClockItems(canvasClock, CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT, CLOCKDISPLAY_CLOCK_Y+TFT_MARGIN_TOP, 0);
     }
     if (clockMinute != minute(t)){
+        sprintf(outString, ("Moving stepper due to Minute: %02d, %02d", clockMinute, minute(t)));
+        Serial.println(outString);
         clockMinute = minute(t);
         updateCanvasClock(canvasClock, clockMinute, false);
         drawClockItems(canvasClock, CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT, CLOCKDISPLAY_CLOCK_Y+TFT_MARGIN_TOP, 2);
@@ -1109,6 +1237,7 @@ void clockDisplay(time_t t)
             Serial.println(((uint16_t)clockMinute)*30);
             Serial.println(stepper.getStep());
             Serial.println(stepper.getStepsLeft());
+
         }
     }
     /*if (clockSecond != second(isrTime)){
@@ -1137,14 +1266,30 @@ void update_temperature(){
     }
 }
 
-// interrupt functions
+// Move tower light
+void updateTowerLight(time_t t){
+	uint16_t towerPos;
+	if (moveTower) {
+		towerPos = ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; // 360°/24h plus 3° per 1/4 h
+		stepper.newMoveToDegreeCCW(towerPos + towerPosOffset);
+		stepperActive = true;
+        Serial.println("Switching Tower Light");
+		Serial.println(towerPos);
+		Serial.println(stepper.getStep());
+		Serial.println(stepper.getStepsLeft());
+	}
+	
+}
+// Interrupt functions
+//////////////////////////////////////////////////////
 
 void isrChangeTime()
 {
     isrTimeChange = true;
 }
 
-// button interrupt flags
+// Button interrupt flags
+///////////////////////////////////////////////////////
 
 void buttonC()
 {
@@ -1164,7 +1309,13 @@ void buttonL()
     isrButtonL = true;
 }
 
-// alarm functions
+// Alarm functions
+//////////////////////////////////////////////////////
+
+		/////////////////////////////////////
+		// TODO
+		// Write almX.nextAlarm when an alarm is set in the menu
+		/////////////////////////////////////
 
 void setAlarmMenu (uint16_t address)
 {
@@ -1194,28 +1345,43 @@ void setAlarmMenu (uint16_t address)
     return false;
 }*/
 
+// Check if an alarm must be triggered
 bool checkAlarms () 
 {
-    if (alm1.act && alm1.hh == hour(isrTime) && alm1.mm == minute(isrTime)) {
-        if (alm1.dd & 0b00000001 << (weekday(isrTime)-1)) {
-            return true;
-        }
-        if (alm1.dd & 0b10000000) {
-            alm1.dd = 0;
-            writeAlarms (ALARM1, alm1);
-            return true; //??
-        }
-    }
-    if (alm2.act && alm2.hh == hour(isrTime) && alm2.mm == minute(isrTime)) {
-        if (alm2.dd & 0b00000001 << (weekday(isrTime)-1)) {
-            return true;
-        }
-    }
-    return false;
+	return (checkAlarm(alm1) || checkAlarm(alm2));
 }
 
+// General alarm check and reset for next day
+bool checkAlarm (struct alarms &alm){
+	// Weekday:
+	// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
+	if (alm.mode > 0 && alm.nextAlarm >= isrTime){ // Alarm is triggered
+		switch (alm.mode){
+			case 0: return false; break;				// Off: Not possible
+			case 1: alm.mode = 0; break; 				// Once: Switch off
+			case 2: alm.nextAlarm += 60*60*24; break;	// Every day: Add 24h
+			case 3: if (weekday(isrTime)<5) {			// Weekdays: So..Thr: Add 24h
+						alm.nextAlarm += 60*60*24;
+					}else if (weekday(isrTime)==6) {		// Weekdays: Fr: Add 3 x 24h
+						alm.nextAlarm += 60*60*24*3;
+					}else if (weekday(isrTime)==7) {		// Weekdays: Fr: Add 2 x 24h
+						alm.nextAlarm += 60*60*24*2;
+					}
+					break;
+			case 4: if (weekday(isrTime)==0) {				// Weekend: So: Add 6 x 24h
+						alm.nextAlarm += 60*60*24;
+					}else if (weekday(isrTime)==7) {		// Weekend: Sa: Add 24h
+						alm.nextAlarm += 60*60*24;
+					}
+					break;
+		}
+		return true;
+	}
+}
 //FRAM functions
+//////////////////////////////////////////////////////
 
+// TODO : Alarm format changed
 void writeAlarms (uint16_t address, struct alarms alm)
 {
     fram.write(address, alm.hh);
@@ -1226,6 +1392,7 @@ void writeAlarms (uint16_t address, struct alarms alm)
     fram.write(address+5, alm.soundfile);
 }
 
+// TODO : Alarm format changed
 void readAlarms (uint16_t address, struct alarms &alm)
 {
     alm.hh = fram.read(address);
