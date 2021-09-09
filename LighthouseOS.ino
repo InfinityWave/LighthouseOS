@@ -250,10 +250,10 @@ uint8_t brightness = LITE;
 struct alarms {
     uint8_t hh;
     uint8_t mm;
-    uint8_t dd;			// Not used, outside of read and write FRAM
-    bool act;			// Not used, outside of read and write FRAM
-    bool light;			// Not used, outside of read and write FRAM
-    uint8_t soundfile;	// Not used, outside of read and write FRAM
+    uint8_t dd;			// Not used outside of read and write FRAM
+    bool act;			// Not used outside of read and write FRAM
+    bool light;			// Not used outside of read and write FRAM
+    uint8_t soundfile;	// Not used outside of read and write FRAM
     time_t nextAlarm; // Time stamp of next alarm. Will not be stored on FRAM
 	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
@@ -982,7 +982,7 @@ bool saveReturnToMainMenu()
         sleepTimer = millis();
         isrButtonC = false;
         // Write alarms to FRAM
-		writeAlarms(alm1);
+		writeAlarms(0, alm1);
 		writeAlarms(alm2);
 		// Update Alarms for next call
 		recalcAlarm(alm1);
