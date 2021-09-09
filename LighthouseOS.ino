@@ -59,6 +59,7 @@
 Number "88":
 12pt size 1: 24x17 
 12pt size 2: 48x34
+12pt size 3: 72x51
 18pt size 1: 36x25 
 18pt size 2: 72x50
 Date "11.09.2021":
@@ -68,10 +69,10 @@ Date "11.09.2021":
 18pt size 2: 296x50
 */
 // TFT&Canvas Settings
-#define FONTSIZE_BIG_HEIGHT 50
+#define FONTSIZE_BIG_HEIGHT 51
 #define FONTSIZE_NORMAL_HEIGHT 34
-#define FONTSIZE_SMALL_HEIGHT 25
-#define FONTSIZE_TINY_HEIGHT 17
+#define FONTSIZE_SMALL_HEIGHT 17
+//#define FONTSIZE_TINY_HEIGHT 17
 #define FONT_MARGIN 4
 #define CANVAS_CLOCK_WIDTH 76
 #define CANVAS_DATE_WIDTH 232
@@ -140,9 +141,10 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuItem(180, FONTSIZE_SMALL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
-GFXcanvas1 canvasTinyFont(220, FONTSIZE_TINY_HEIGHT+3*FONT_MARGIN);
 GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
+GFXcanvas1 canvasNormalFont(180, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
+GFXcanvas1 canvasSmallFont(220, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
+
 
 //Variables to store size of display/canvas texts
 int16_t  x1, y1;
@@ -380,12 +382,12 @@ void setup(void) {
     //canvasMenuLR.setTextSize(2);
     canvasMenuLR.setFont(&FreeSans12pt7b);
     canvasMenuLR.setTextSize(3);
-    canvasTinyFont.setFont(&FreeSans12pt7b);
-    canvasTinyFont.setTextSize(1);
-    //canvasMenuItem.setFont(&FreeSans18pt7b);
-    //canvasMenuItem.setTextSize(1);
-    canvasMenuItem.setFont(&FreeSans12pt7b);
-    canvasMenuItem.setTextSize(2);    
+    canvasSmallFont.setFont(&FreeSans12pt7b);
+    canvasSmallFont.setTextSize(1);
+    //canvasNormalFont.setFont(&FreeSans18pt7b);
+    //canvasNormalFont.setTextSize(1);
+    canvasNormalFont.setFont(&FreeSans12pt7b);
+    canvasNormalFont.setTextSize(2);    
 
     brightness = LITE; //set brightness
     
@@ -548,28 +550,28 @@ void drawClockDisplayInfo(){
     tempChanged = false;
     DCFSyncChanged = false;
     
-    int16_t ypos = TFT_HEIGHT - TFT_MARGIN_BOT - canvasTinyFont.height();
+    int16_t ypos = TFT_HEIGHT - TFT_MARGIN_BOT - canvasSmallFont.height();
      
     tft.fillRect(0, ypos-MENULINEWIDTH, TFT_WIDTH, MENULINEWIDTH, COLOR_TXT);
 
-    canvasTinyFont.fillScreen(COLOR_BKGND);
-    canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
-    canvasTinyFont.print("LighthouseOS");
-    tft.drawBitmap(CLOCKDISPLAY_LH_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+    canvasSmallFont.fillScreen(COLOR_BKGND);
+    canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
+    canvasSmallFont.print("LighthouseOS");
+    tft.drawBitmap(CLOCKDISPLAY_LH_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 
     if (DCFSyncStatus){
-        canvasTinyFont.fillScreen(COLOR_BKGND);
-        canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
-        canvasTinyFont.print("DCF");
-        tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+        canvasSmallFont.fillScreen(COLOR_BKGND);
+        canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
+        canvasSmallFont.print("DCF");
+        tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
     }
-    canvasTinyFont.fillScreen(COLOR_BKGND);
-    canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
+    canvasSmallFont.fillScreen(COLOR_BKGND);
+    canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
     sprintf(outString, "%d", (int)currentTemp);
-    canvasTinyFont.print(outString);
-    //canvasTinyFont.print((char)247); //Not supported by non standard Font
-    canvasTinyFont.print("C");
-    tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+    canvasSmallFont.print(outString);
+    //canvasSmallFont.print((char)247); //Not supported by non standard Font
+    canvasSmallFont.print("C");
+    tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 }
 
 // standby state
@@ -623,11 +625,11 @@ void stateMainMenu()
         for (int i=0; i<MENU_ITEMS; i++){
             sprintf(outString, "Item %d: %d", i, ((selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS));
             Serial.println(outString);
-            canvasMenuItem.fillScreen(COLOR_BKGND);
-            canvasMenuItem.setCursor(0,FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
-            canvasMenuItem.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
-            tft.drawBitmap(TFT_MARGIN_LEFT+MENU_ITEMS_X, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
-            cursorY = cursorY + canvasMenuItem.height();
+            canvasNormalFont.fillScreen(COLOR_BKGND);
+            canvasNormalFont.setCursor(0,FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
+            canvasNormalFont.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
+            tft.drawBitmap(TFT_MARGIN_LEFT+MENU_ITEMS_X, cursorY, canvasNormalFont.getBuffer(), canvasNormalFont.width(), canvasNormalFont.height(), COLOR_TXT, COLOR_BKGND);
+            cursorY = cursorY + canvasNormalFont.height();
         }
     }
 }
@@ -672,27 +674,27 @@ void stateClockMenu()
         uint8_t underline = 0;
         if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
             if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
-            drawClock(canvasMenuItem, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
+            drawClock(canvasNormalFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
         }
-        cursorY = cursorY + canvasMenuItem.height();
+        cursorY = cursorY + canvasNormalFont.height();
         if (updateScreen || submenu.selectedItem==2 || submenu.selectedItem==3 || submenu.selectedItem==4){
             if (submenu.selectedItem==2 || submenu.selectedItem==3 || submenu.selectedItem==4){
                 underline=submenu.selectedItem-1;
                 }       
-            updateCanvasDate(canvasMenuItem, submenu.item[2], submenu.item[3], submenu.item[4], underline);
-            tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
+            updateCanvasDate(canvasNormalFont, submenu.item[2], submenu.item[3], submenu.item[4], underline);
+            tft.drawBitmap(cursorX, cursorY, canvasNormalFont.getBuffer(), canvasNormalFont.width(), canvasNormalFont.height(), COLOR_TXT, COLOR_BKGND);
          }
-        cursorY = cursorY + canvasMenuItem.height();/*
+        cursorY = cursorY + canvasNormalFont.height();/*
         if (updateScreen || submenu.selectedItem==5){
-            canvasMenuItem.fillScreen(COLOR_BKGND);
-            canvasMenuItem.setCursor(0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH);
-            canvasMenuItem.println(clockOptions[submenu.item[5]]);
+            canvasNormalFont.fillScreen(COLOR_BKGND);
+            canvasNormalFont.setCursor(0, canvasNormalFont.height()-FONT_MARGIN-MENULINEWIDTH);
+            canvasNormalFont.println(clockOptions[submenu.item[5]]);
             if (submenu.selectedItem==5){
-                canvasMenuItem.getTextBounds(clockOptions[submenu.item[5]], 0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-                canvasMenuItem.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
+                canvasNormalFont.getTextBounds(clockOptions[submenu.item[5]], 0, canvasNormalFont.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
+                canvasNormalFont.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
             }
-            tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
-            //updateCanvasText(canvasMenuItem, soundOptions[submenu.item[5]],
+            tft.drawBitmap(cursorX, cursorY, canvasNormalFont.getBuffer(), canvasNormalFont.width(), canvasNormalFont.height(), COLOR_TXT, COLOR_BKGND);
+            //updateCanvasText(canvasNormalFont, soundOptions[submenu.item[5]],
         }*/
 
 
@@ -791,7 +793,7 @@ void stateCreditsMenu()
         updateScreen = false;   
         tft.setFont(&FreeSans12pt7b);
         tft.setTextSize(1);
-        tft.setCursor(0, cursorYMenuStart+FONTSIZE_TINY_HEIGHT);
+        tft.setCursor(0, cursorYMenuStart+FONTSIZE_SMALL_HEIGHT);
         tft.println("  Not All Who Wander");
         tft.println("  Are Lost!");
         //tft.setFont();
@@ -1436,10 +1438,10 @@ void drawMenuSetter(uint8_t isOn)
     }
     if (isOn & 4){
         // Center Icon
-        canvasMenuItem.fillScreen(COLOR_BKGND);
-        cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)(canvasMenuItem.width()/2);
-        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasMenuItem.height()/2);
-        tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
+        canvasNormalFont.fillScreen(COLOR_BKGND);
+        cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)(canvasNormalFont.width()/2);
+        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasNormalFont.height()/2);
+        tft.drawBitmap(cursorX, cursorY, canvasNormalFont.getBuffer(), canvasNormalFont.width(), canvasNormalFont.height(), COLOR_TXT, COLOR_BKGND);
         tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, COLOR_TXT);
         tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE-CENTER_ICON_LW, COLOR_BKGND);
     }
@@ -1455,14 +1457,14 @@ void drawMenuSetter(uint8_t isOn)
             sprintf(outString, "Cancel");
             tcolor = COLOR_RED;
         }
-        canvasMenuItem.fillScreen(COLOR_BKGND);
-        canvasMenuItem.setCursor(0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH);
-        canvasMenuItem.getTextBounds(outString, 0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-        canvasMenuItem.println(outString);        
-        canvasMenuItem.fillRect(x1,canvasMenuItem.height()-FONT_MARGIN,w1,MENULINEWIDTH,tcolor);
+        canvasNormalFont.fillScreen(COLOR_BKGND);
+        canvasNormalFont.setCursor(0, canvasNormalFont.height()-FONT_MARGIN-MENULINEWIDTH);
+        canvasNormalFont.getTextBounds(outString, 0, canvasNormalFont.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
+        canvasNormalFont.println(outString);        
+        canvasNormalFont.fillRect(x1,canvasNormalFont.height()-FONT_MARGIN,w1,MENULINEWIDTH,tcolor);
         cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)((x1+w1)/2);
-        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasMenuItem.height()/2);
-        tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), tcolor, COLOR_BKGND);
+        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasNormalFont.height()/2);
+        tft.drawBitmap(cursorX, cursorY, canvasNormalFont.getBuffer(), canvasNormalFont.width(), canvasNormalFont.height(), tcolor, COLOR_BKGND);
     }
 }
 
