@@ -1557,7 +1557,7 @@ void buttonL()
 
 		/////////////////////////////////////
 		// TODO
-		// Write almX.nextAlarm when an alarm is set in the menu
+		// Call recalcAlarm on changed alarms to get a new value of nextAlarm
 		/////////////////////////////////////
 
 void setAlarmMenu (uint16_t address)
@@ -1589,10 +1589,9 @@ void setAlarmMenu (uint16_t address)
 }*/
 
 // Check if an alarm must be triggered
-bool checkAlarms () 
-{	
+bool checkAlarms () {	
 	// Only check once per min
-	if (minute(isrTime)!= minute(isrTime_last){
+	if (minute(isrTime)!= minute(isrTime_last)){
 		isrTime_last = isrTime;								// Store time to see when the next minute comes
 		return (checkAlarm(alm1) || checkAlarm(alm2));		// Check both alarms
 	}
