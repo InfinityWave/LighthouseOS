@@ -228,14 +228,16 @@ bool updateClockSign = false;
 bool changeValue = false;
 
 // Alarm variables
-uint32_t alarmLightDelay = 1000;
-uint32_t alarmLightTimer = 0;
-bool alarmLightOn = false;
+uint32_t alarmLightDelay = 1000;	// Time for tower light on (ms)
+uint32_t alarmLightTimer = 0;		// Tower light times
+bool alarmLightOn = false;			// If tower light is on
+time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
 
 // Stepper and tower variables
 bool moveTower = true;
-bool stepperActive = false;
-uint16_t towerPosOffset = 0; // 0 o'clock light position (homing)
+bool stepperActive = false;		// Does the stepper run?
+uint16_t towerPosOffset = 0; 	// 0 o'clock light position (homing)
+uint16_t towerPos_last = 0; 	// To compare and check if a new position has to be commanded
 
 //display variable
 uint8_t brightness = LITE;
@@ -244,11 +246,11 @@ uint8_t brightness = LITE;
 struct alarms {
     uint8_t hh;
     uint8_t mm;
-    uint8_t dd;
-    bool act;
-    bool light;
-    uint8_t soundfile;
-    time_t nextAlarm; // Time stamp of next alarm
+    uint8_t dd;			// Not used, outside of read and write FRAM
+    bool act;			// Not used, outside of read and write FRAM
+    bool light;			// Not used, outside of read and write FRAM
+    uint8_t soundfile;	// Not used, outside of read and write FRAM
+    time_t nextAlarm; // Time stamp of next alarm. Will not be stored on FRAM
 	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
 
@@ -403,9 +405,18 @@ void setup(void) {
     else
         Serial.println("I2C FRAM not identified");
 
-    // space for variable inits
+	// Read stored alarms from FRAM
+	///////////////////////////////////
     readAlarms(ALARM1, alm1);
     readAlarms(ALARM2, alm2);
+	
+	// Set time value for alarms
+	////////////////////////////////////
+	// Note: isrTime must be correct!
+	recalcAlarm(alm1);
+	recalcAlarm(alm2);
+	// Init Stepper
+	//////////////////////////////////
     stepper.setStep(read16bit(C_STEP));
     
     // Buttons interrupt setup
@@ -423,6 +434,8 @@ void loop()
 	// Time from RTC
     if (isrTimeChange) {
         updateClock();
+		// Check if tower has to be moved to new posistion and command movement
+		updateTowerLight(isrTime);
     }
     // Trigger new read from RTC
     if (millis() - rtcSyncTimer > rtcSyncDelay){
@@ -467,14 +480,11 @@ void loop()
 	//////////////////////////
 	// StateMachine
     machine.run();
-	// ToDo Show time via tower light
-	//updateTowerLight(isrTime);
-    stepper.run();
     if (moveTower) {
         stepper.run();
         if (stepperActive && stepper.getStepsLeft() == 0) {
             stepperActive = false;
-            stepper.off();
+            stepper.off();									// TODO: Check if the stepper is switched on in newMoveDegreesCCW
         }
     }
 }
@@ -514,7 +524,7 @@ void stateClockDisplay()
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
     }
-	if (millis() > alarmLightTimer + alarmLightDelay){ // Time is up...
+	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
 		alarmLightOn = false; 						// Turn on light flag
 		analogWrite(LED_MAIN, 0);					// Switch tower light
 		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
@@ -569,7 +579,7 @@ void stateAlarmActive()
         clockDisplay(isrTime);
         analogWrite(TFT_LITE, brightness);
 	}
-	if (millis() > alarmLightTimer + alarmLightDelay) {
+	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
 		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
@@ -900,7 +910,7 @@ bool startAlarm()
 
 bool returnToClockDisplay()
 {
-    if (millis() > sleepTimer + sleepDelay){
+    if (millis() - sleepTimer > sleepDelay){
         sleepTimer = millis();
         clearTFT();
         prepareClock();
@@ -1461,14 +1471,6 @@ void clockDisplay(time_t t)
         clockMinute = minute(t);
         updateCanvasClock(canvasClock, clockMinute, false);
         drawClockItems(canvasClock, CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT, CLOCKDISPLAY_CLOCK_Y+TFT_MARGIN_TOP, 2);
-        if (moveTower) {
-            stepper.newMoveToDegree(true, ((uint16_t)clockMinute)*30);
-            stepperActive = true;
-            Serial.println(((uint16_t)clockMinute)*30);
-            Serial.println(stepper.getStep());
-            Serial.println(stepper.getStepsLeft());
-
-        }
     }
     /*if (clockSecond != second(isrTime)){
         clockSecond = second(isrTime);
@@ -1506,17 +1508,21 @@ void update_temperature(){
 // Move tower light
 void updateTowerLight(time_t t){
 	uint16_t towerPos;
-	if (moveTower) {
-		towerPos = ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; // 360°/24h plus 3° per 1/4 h
-		stepper.newMoveToDegreeCCW(towerPos + towerPosOffset);
-		stepperActive = true;
-        Serial.println("Switching Tower Light");
-		Serial.println(towerPos);
-		Serial.println(stepper.getStep());
-		Serial.println(stepper.getStepsLeft());
+	uint16_t towerWay;
+	towerPos = towerPosOffset + ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; 	// 360°/24h plus 3° per 1/4 h. Will change every 15min
+	if ((moveTower)&&(towerPos_last!=towerPos) {												// Command new position if needed (every 15 min)
+		if (towerPos > towerPos_last){															// make sure the resulting way is positive
+			towerWay = towerPos-towerPos_last;
+		}else{
+			towerWay = towerPos+360-towerPos_last;
+		}
+		stepper.newMoveDegreesCCW(towerWay);													// Command movemnt (relative! not absolute)
+		towerPos_last = towerPos;																// Store changed pos value
+		stepperActive = true;																	// Switch on stepper
 	}
 	
 }
+
 // Interrupt functions
 //////////////////////////////////////////////////////
 
@@ -1584,8 +1590,13 @@ void setAlarmMenu (uint16_t address)
 
 // Check if an alarm must be triggered
 bool checkAlarms () 
-{
-	return (checkAlarm(alm1) || checkAlarm(alm2));
+{	
+	// Only check once per min
+	if (minute(isrTime)!= minute(isrTime_last){
+		isrTime_last = isrTime;								// Store time to see when the next minute comes
+		return (checkAlarm(alm1) || checkAlarm(alm2));		// Check both alarms
+	}
+	return false;
 }
 
 // General alarm check and reset for next day
@@ -1614,11 +1625,104 @@ bool checkAlarm (struct alarms &alm){
 		}
 		return true;
 	}
+	return false;
+}
+
+// Recalculate nextAlarm, e.g. after reading from FRAM or setting a new alarm in the menu
+void recalcAlarm(struct alarms &alm){
+	
+	// 1st: Set alarm for today
+	tmElements_t myElements = {0, alm.mm, alm.hh, weekday(isrTime), day(isrTime), month(isrTime), year(isrTime)-1970 };
+	time_t alm.nextAlarm = makeTime(myElements);
+	// 2nd: Check Alarm is in the past or not allowed today
+	if (alm.mode<=2){ 						// Not related to weekdays
+		if (alm.nextAlarm < isrTime){		// If alarm is in the past...
+			alm.nextAlarm += 60*60*24;		// ... add 24h
+		}
+	}else{									// Alarm is related to weekdays
+		// Weekday:
+		// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
+		switch (weekday(isrTime)){ 			// Check today:
+			case 0: 						// Sunday
+				if (alm.mode==3){			// Next weekday is Monday => add 24h
+					alm.nextAlarm += 60*60*24;
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on Sa...
+						alm.nextAlarm += 60*60*24 * 6; // Add 6 days
+					}
+				}
+			break;
+			case 1: 						// Monday
+				if (alm.mode==3){			// Weekday-alarm
+					if (alm.nextAlarm < isrTime){ // if in the past ... 
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += 60*60*24 * 5; // Add 5 days
+					}
+				}
+			break;
+			case 2: 						// Tuesday
+				if (alm.mode==3){			// Weekday-alarm
+					if (alm.nextAlarm < isrTime){ // if in the past ... 
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += 60*60*24 * 4; // Add 4 days
+					}
+				}
+			break;
+			case 3: 						// Wednesday
+				if (alm.mode==3){			// Weekday-alarm
+					if (alm.nextAlarm < isrTime){ // if in the past ... 
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += 60*60*24 * 3; // Add 3 days
+					}
+				}
+			break;
+			case 4: 						// Thurday
+				if (alm.mode==3){			// Weekday-alarm
+					if (alm.nextAlarm < isrTime){ // if in the past ... 
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += 60*60*24 * 2; // Add 2 days
+					}
+				}
+			break;
+			case 5: 						// Friday
+				if (alm.mode==3){			// Weekday-alarm
+					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on Mo 
+						alm.nextAlarm += 60*60*24 * 3; // Add 3 days
+					}
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}
+			break;
+			case 6: 						// Saturday
+				if (alm.mode==3){			// Next weekday is Monday => add 2 days
+					alm.nextAlarm += 60*60*24 *2;
+				}else if (alm.mode==4){		// Weekend-alarm...
+					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on So...
+						alm.nextAlarm += 60*60*24; // Add 1 days
+					}
+				}
+			break;
+		}
+	}
+
 }
 //FRAM functions
 //////////////////////////////////////////////////////
 
-// TODO : Alarm format changed
 void writeAlarms (uint16_t address, struct alarms alm)
 {
     fram.write(address, alm.hh);
@@ -1627,17 +1731,20 @@ void writeAlarms (uint16_t address, struct alarms alm)
     fram.write(address+3, alm.act);
     fram.write(address+4, alm.light);
     fram.write(address+5, alm.soundfile);
+	fram.write(address+6, alm.mode);
 }
 
-// TODO : Alarm format changed
+
 void readAlarms (uint16_t address, struct alarms &alm)
 {
+	// Note: nextAlarm is not sored. Must be calculated after reading the alarm
     alm.hh = fram.read(address);
     alm.mm = fram.read(address+1);
     alm.dd = fram.read(address+2);
     alm.act = fram.read(address+3);
     alm.light = fram.read(address+4);
     alm.soundfile = fram.read(address+5);
+	alm.mode 	= fram.read(address+6);
 }
 
 void write16bit (uint16_t address, uint16_t data)
