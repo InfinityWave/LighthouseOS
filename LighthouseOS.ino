@@ -905,7 +905,7 @@ bool stopAlarm()
     return false;
 }
 
-// Start alamr when time has come
+// Start alarm when time has come
 bool startAlarm()
 {
 	if (checkAlarms()) {
@@ -938,6 +938,7 @@ bool returnToClockDisplay()
 //////////////////////
 // Begin Section for SubMenus
 //
+// Return without saving changes
 bool returnToMainMenu()
 {   
     //Return to main menu without saving
@@ -952,13 +953,21 @@ bool returnToMainMenu()
     }
     return false;
 }
+
+// Save changes to FRAM and apply to system + return
 bool saveReturnToMainMenu()
 {   
     //Save and return to main menu
     if (isrButtonC  && (submenu.selectedItem == (submenu.num_items+1))){
         sleepTimer = millis();
         isrButtonC = false;
-        // ToDo Handle all save to FRAM
+        // Write alarms to FRAM
+		writeAlarms(alm1);
+		writeAlarms(alm2);
+		// Update Alarms for next call
+		recalcAlarm(alm1);
+		recalcAlarm(alm2);
+		// Do other stuff
         clearTFT();
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
@@ -967,7 +976,9 @@ bool saveReturnToMainMenu()
     }
     return false;
 }
-bool openClockMenu(){
+
+bool openClockMenu()
+{
     if (isrButtonC  && (selectedMMItem == 0)){
         openSuBMenu();
         return true;   
@@ -1038,7 +1049,8 @@ bool openCreditsMenu()
     return false;
 }
 
-void updateSubMenuCenterIcon(){
+void updateSubMenuCenterIcon()
+{
     if (submenu.selectedItem==(submenu.num_items+1)){
         Serial.println("Draw Setter 16");
         drawMenuSetter(16);
@@ -1164,7 +1176,10 @@ bool changeSubMenuSelection()
     return false;
 }
 
-void correct_date(int16_t *date){
+// Helper functions and wedding mode
+///////////////////////////////
+void correct_date(int16_t *date)
+{
     // Check the date and correct based on calendar
     // date must be an array with 1st entry hour, than minute, day, month, year
     
@@ -1201,7 +1216,8 @@ void correct_date(int16_t *date){
     correct_time(date);
 }
 
-void correct_time(int16_t *dtime){
+void correct_time(int16_t *dtime)
+{
     // Check the time for over and underflows
     // date must be an array with 1st entry hour, than minute
     
@@ -1215,7 +1231,6 @@ void correct_time(int16_t *dtime){
     }
     dtime[1] = dtime[1] % 60;
 }
-
 
 bool changeToWeddingMode()
 {
@@ -1526,7 +1541,7 @@ void updateTowerLight(time_t t){
 	uint16_t towerWay;
 	towerPos = towerPosOffset + ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; 	// 360°/24h plus 3° per 1/4 h. Will change every 15min
 	// Command new position if needed ...
-	if ((moveTower)&&(stepperActive==false)&&(towerPos_last!=towerPos) {		// Set point changed AND nothing is running		
+	if ((moveTower)&&(stepperActive==false)&&(towerPos_last!=towerPos)) {		// Set point changed AND nothing is running		
 		if (towerPos > towerPos_last){											// make sure the resulting way is positive
 			towerWay = towerPos-towerPos_last;
 		}else{
@@ -1570,12 +1585,7 @@ void buttonL()
 
 // Alarm functions
 //////////////////////////////////////////////////////
-
-		/////////////////////////////////////
-		// TODO
-		// Call recalcAlarm on changed alarms to get a new value of nextAlarm
-		/////////////////////////////////////
-
+// Note: Saving changes in the alarms and recalculation the next alarm is done in saveReturnToMainMenu
 void setAlarmMenu (uint16_t address)
 {
     // make alarm menu screen
