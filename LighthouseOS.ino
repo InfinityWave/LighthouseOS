@@ -10,8 +10,8 @@
 #include <Adafruit_ILI9341.h>// Controller specific library
 #include <CheapStepper.h> //https://github.com/H4K5M6/CheapStepper
 #include <Fonts/FreeSans12pt7b.h>
-#include <Fonts/FreeSans18pt7b.h>
-#include "Adresses.h"
+//#include <Fonts/FreeSans18pt7b.h>
+#include "Adresses.h"  // FRAM Adresses
 
 //DS3231 pins
 #define DS3231_INT 3      // interrupt
@@ -369,17 +369,23 @@ void setup(void) {
     tft.setRotation(3);
     tft.fillScreen(COLOR_BKGND);
     set_default_font();
-    canvasClock.setFont(&FreeSans18pt7b);
-    canvasClock.setTextSize(2);
+    //canvasClock.setFont(&FreeSans18pt7b);
+    //canvasClock.setTextSize(2);
+    canvasClock.setFont(&FreeSans12pt7b);
+    canvasClock.setTextSize(3);
+    
     canvasDate.setFont(&FreeSans12pt7b);
     canvasDate.setTextSize(2);
-    canvasMenuLR.setFont(&FreeSans18pt7b);
-    canvasMenuLR.setTextSize(2);
+    //canvasMenuLR.setFont(&FreeSans18pt7b);
+    //canvasMenuLR.setTextSize(2);
+    canvasMenuLR.setFont(&FreeSans12pt7b);
+    canvasMenuLR.setTextSize(3);
     canvasTinyFont.setFont(&FreeSans12pt7b);
     canvasTinyFont.setTextSize(1);
-    canvasMenuItem.setFont(&FreeSans18pt7b);
-    canvasMenuItem.setTextSize(1);
-    
+    //canvasMenuItem.setFont(&FreeSans18pt7b);
+    //canvasMenuItem.setTextSize(1);
+    canvasMenuItem.setFont(&FreeSans12pt7b);
+    canvasMenuItem.setTextSize(2);    
 
     brightness = LITE; //set brightness
     
@@ -409,8 +415,8 @@ void setup(void) {
 
 	// Read stored alarms from FRAM
 	///////////////////////////////////
-    readAlarms(ALARM1, alm1);
-    readAlarms(ALARM2, alm2);
+    readAlarms(FRAM_ALARM1, alm1);
+    readAlarms(FRAM_ALARM2, alm2);
 	
 	// Set time value for alarms
 	////////////////////////////////////
@@ -419,7 +425,7 @@ void setup(void) {
 	recalcAlarm(alm2);
 	// Init Stepper
 	//////////////////////////////////
-    stepper.setStep(read16bit(C_STEP));
+    stepper.setStep(read16bit(FRAM_C_STEP));
     
     // Buttons interrupt setup
     pinMode(BTN_C, INPUT_PULLUP);
@@ -495,7 +501,7 @@ void loop()
 }
 
 void set_default_font(){
-    tft.setFont(&FreeSans18pt7b);
+    tft.setFont(&FreeSans12pt7b);
     tft.setTextSize(1);
 }
 
@@ -886,7 +892,7 @@ bool closeMainMenu()
 bool stopAlarm()
 {
 	// Stop-Alam button was pressed OR on timeout
-	if ((isrButtonL)||(mills()-alarmTotalTimer > alarmTotalDelay)) {
+	if ((isrButtonL)||(millis()-alarmTotalTimer > alarmTotalDelay)) {
       isrButtonL = false;		// Reset Btn-flag
       isrTimeUpdate = true;		// ??
       delay(50);
@@ -912,7 +918,7 @@ bool startAlarm()
 		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
-		alarmTotalTimer = mills();			// Start timer
+		alarmTotalTimer = millis();			// Start timer
 		/////////////////////////////////////
 		// TODO
 		// Start MP3-Player
@@ -962,8 +968,8 @@ bool saveReturnToMainMenu()
         sleepTimer = millis();
         isrButtonC = false;
         // Write alarms to FRAM
-		writeAlarms(alm1);
-		writeAlarms(alm2);
+		writeAlarms(FRAM_ALARM1, alm1);
+		writeAlarms(FRAM_ALARM2, alm2);
 		// Update Alarms for next call
 		recalcAlarm(alm1);
 		recalcAlarm(alm2);
@@ -1658,7 +1664,7 @@ void recalcAlarm(struct alarms &alm){
 	
 	// 1st: Set alarm for today
 	tmElements_t myElements = {0, alm.mm, alm.hh, weekday(isrTime), day(isrTime), month(isrTime), year(isrTime)-1970 };
-	time_t alm.nextAlarm = makeTime(myElements);
+	alm.nextAlarm = makeTime(myElements);
 	// 2nd: Check Alarm is in the past or not allowed today
 	if (alm.mode<=2){ 						// Not related to weekdays
 		if (alm.nextAlarm < isrTime){		// If alarm is in the past...
