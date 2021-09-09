@@ -232,12 +232,14 @@ uint32_t alarmLightDelay = 1000;	// Time for tower light on (ms)
 uint32_t alarmLightTimer = 0;		// Tower light times
 bool alarmLightOn = false;			// If tower light is on
 time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
+uint32_t alarmTotalTimer = 0;		// Timer to stop alarm after some time (if noone is at home to press the button)
+uint32_t alarmTotalDelay = 120000;	// 2 min
 
 // Stepper and tower variables
 bool moveTower = true;
-bool stepperActive = false;		// Does the stepper run?
-uint16_t towerPosOffset = 0; 	// 0 o'clock light position (homing)
-uint16_t towerPos_last = 0; 	// To compare and check if a new position has to be commanded
+bool stepperActive = false;			// Does the stepper run? Do not command any new movement before the last one is finished
+uint16_t towerPosOffset = 0; 		// 0 o'clock light position (homing)
+uint16_t towerPos_last = 0; 		// To compare and check if a new position has to be commanded
 
 //display variable
 uint8_t brightness = LITE;
@@ -433,6 +435,7 @@ void loop()
 {
 	// Time from RTC
     if (isrTimeChange) {
+		// Get new time from RTC, sets isrTime
         updateClock();
 		// Check if tower has to be moved to new posistion and command movement
 		updateTowerLight(isrTime);
@@ -480,10 +483,12 @@ void loop()
 	//////////////////////////
 	// StateMachine
     machine.run();
+	// Stepper
     if (moveTower) {
         stepper.run();
+		// Is the stepper run finished (no stepps left)?
         if (stepperActive && stepper.getStepsLeft() == 0) {
-            stepperActive = false;
+            stepperActive = false;							// Not active any more
             stepper.off();									// TODO: Check if the stepper is switched on in newMoveDegreesCCW
         }
     }
@@ -574,15 +579,22 @@ void stateStandby()
 // S99 = Active alarm
 void stateAlarmActive()
 {
+	// Continue showing the clock
 	if (isrTimeUpdate) {
         isrTimeUpdate = false;
         clockDisplay(isrTime);
         analogWrite(TFT_LITE, brightness);
 	}
+	// Switch on and off the tower LED
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
 		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+	}
+	// Move the tower in full revs
+	if (stepperActive == false){								// Only command a new movemoent if nothing is running
+		stepperActive	= true;									// Set flag to make sure no other movement is commanded
+		stepper.newMoveDegreesCCW(360);							// Command one full rev
 	}
 		/////////////////////////////////////
 		// TODO
@@ -873,15 +885,17 @@ bool closeMainMenu()
 // Stop alarm when pressing L-Button
 bool stopAlarm()
 {
-	if (isrButtonL) {			// Stop-Alam button was pressed
+	// Stop-Alam button was pressed OR on timeout
+	if ((isrButtonL)||(mills()-alarmTotalTimer > alarmTotalDelay)) {
       isrButtonL = false;		// Reset Btn-flag
       isrTimeUpdate = true;		// ??
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-	  analogWrite(LED_MAIN, 0); // Switch off tower light
+	  analogWrite(LED_MAIN, 0); 			// Switch off tower light
 	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
+	  
 	  /////////////////////////////////////
 	  // TODO
 	  // Stop MP3-Player
@@ -898,6 +912,7 @@ bool startAlarm()
 		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+		alarmTotalTimer = mills();			// Start timer
 		/////////////////////////////////////
 		// TODO
 		// Start MP3-Player
@@ -1510,15 +1525,16 @@ void updateTowerLight(time_t t){
 	uint16_t towerPos;
 	uint16_t towerWay;
 	towerPos = towerPosOffset + ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; 	// 360°/24h plus 3° per 1/4 h. Will change every 15min
-	if ((moveTower)&&(towerPos_last!=towerPos) {												// Command new position if needed (every 15 min)
-		if (towerPos > towerPos_last){															// make sure the resulting way is positive
+	// Command new position if needed ...
+	if ((moveTower)&&(stepperActive==false)&&(towerPos_last!=towerPos) {		// Set point changed AND nothing is running		
+		if (towerPos > towerPos_last){											// make sure the resulting way is positive
 			towerWay = towerPos-towerPos_last;
 		}else{
 			towerWay = towerPos+360-towerPos_last;
 		}
-		stepper.newMoveDegreesCCW(towerWay);													// Command movemnt (relative! not absolute)
-		towerPos_last = towerPos;																// Store changed pos value
-		stepperActive = true;																	// Switch on stepper
+		stepper.newMoveDegreesCCW(towerWay);									// Command movemnt (relative! not absolute)
+		towerPos_last = towerPos;												// Store changed pos value
+		stepperActive = true;													// Set flag to make sure no other movement is commanded
 	}
 	
 }
