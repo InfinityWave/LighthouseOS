@@ -120,6 +120,7 @@ Date "11.09.2021":
 #define ALARM_ITEMS 4
 #define ALARMTIME_ITEMS 4
 #define CLOCK_ITEMS 4
+#define ALARM_MODES 5		// Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 
 #define LITE 200  // standard brightness
 
@@ -207,9 +208,10 @@ volatile bool isrButtonR = false;
 // menu entries
 const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
 const char *soundOptions[SOUND_ITEMS] = {"Horn", "Wedding", "Off"};
-const char *alarmOptions[ALARM_ITEMS] = {"Light+Horn", "Light+Wedding", "Light only", "Off"};
-const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Always", "Mo-Fr", "Sa+So", "Off"};
 const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor only", "Off"};
+
+const char *almModes[CLOCK_ITEMS] = {"Off", "Single", "Every day", "Weekday", "Weekend"};
+
 
 // Skip this. Not needed!
 ///////////////////////////////////////////////
@@ -713,9 +715,27 @@ void stateClockMenu()
     //clockDisplay(isrTime);
 }
 
-
+// Draw menu to set alarms 
 void drawAlarmMenu(){
-
+if (updateScreen) {
+        updateMenuSelection = true;
+    }
+    if (updateMenuSelection){
+        updateMenuSelection = false;
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        uint8_t underline = 0;
+		// Draw time and mark selected item
+        if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
+            if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
+            drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
+        }
+        cursorY = cursorY + canvasSmallFont.height();
+        // Draw mode
+		updateCanvasText(canvasSmallFont, almModes[submenu.item[2]], submenu.selectedItem==2)
+		tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+        updateScreen = false;
+    }
 }
 
 //S5
@@ -728,9 +748,6 @@ void stateAlarm1Menu()
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     drawAlarmMenu();
-    //Set Alarm1
-    //Select Alarm Sound
-    //Select if lights should be on
 }
 
 //S6
@@ -743,9 +760,6 @@ void stateAlarm2Menu()
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     drawAlarmMenu();
-    //Set Alarm2
-    //Select Alarm Sound
-    //Select if lights should be on
 }
 
 //S7
@@ -991,12 +1005,35 @@ bool saveReturnToMainMenu()
     if (isrButtonC  && (submenu.selectedItem == (submenu.num_items+1))){
         sleepTimer = millis();
         isrButtonC = false;
-        // Write alarms to FRAM
-		writeAlarms(FRAM_ALARM1, alm1);
-		writeAlarms(FRAM_ALARM2, alm2);
-		// Update Alarms for next call
-		recalcAlarm(alm1);
-		recalcAlarm(alm2);
+		
+		switch (selectedMMItem){
+        case 0:
+            //ClockMenu
+            // TODO: Write clock settings to somewhere
+			////////////////////////////////////////////
+            break;
+		case 1:
+            //Alarm1
+			alm1.hh = submenu.item[0];
+			alm1.mm = submenu.item[1];
+			alm1.mode = submenu.item[2];
+			// Write alarms to FRAM
+			writeAlarms(FRAM_ALARM1, alm1);
+			// Update Alarms for next call
+			recalcAlarm(alm1);
+            break;
+		case 2:
+            //Alarm1
+			alm1.hh = submenu.item[0];
+			alm1.mm = submenu.item[1];
+			alm1.mode = submenu.item[2];
+			// Write alarms to FRAM
+			writeAlarms(FRAM_ALARM1, alm1);
+			// Update Alarms for next call
+			recalcAlarm(alm1);
+            break;
+		}
+		
 		// Do other stuff
         clearTFT();
         delay(50);
@@ -1113,14 +1150,36 @@ void openSuBMenu()
     switch (selectedMMItem){
         case 0:
             //ClockMenu
-            submenu.num_items = 5;
+            // submenu.num_items = 5;
+			submenu.num_items = 4; // Kick clock options!
             submenu.dateinfo_starts = 0;
             submenu.item[0] = hour(isrTime);
             submenu.item[1] = minute(isrTime);
             submenu.item[2] = day(isrTime);
             submenu.item[3] = month(isrTime);
             submenu.item[4] = year(isrTime);
-            submenu.item[5] = clockOption;
+            // submenu.item[5] = clockOption; // Do not implement
+			// TODO: Max and min for clockOption missing!?!?
+            break;
+		case 1:
+            //Alarm1
+            submenu.num_items = 2; // 3 Items
+            submenu.timeinfo_starts = 0; // Only time, no date
+            submenu.item[0] = alm1.hh;
+            submenu.item[1] = alm1.mm;
+            submenu.item[2] = alm1.mode;
+			submenu.maxVal[2] = 4;
+			submenu.minVal[2] = 0;
+            break;
+		case 2:
+            //Alarm2
+            submenu.num_items = 2; // 3 Items
+            submenu.timeinfo_starts = 0; // Only time, no date
+            submenu.item[0] = alm2.hh;
+            submenu.item[1] = alm2.mm;
+            submenu.item[2] = alm2.mode;
+			submenu.maxVal[2] = 4;
+			submenu.minVal[2] = 0;
             break;
         case 8:
             //Credits
@@ -1622,33 +1681,6 @@ void buttonL()
 // Alarm functions
 //////////////////////////////////////////////////////
 // Note: Saving changes in the alarms and recalculation the next alarm is done in saveReturnToMainMenu
-void setAlarmMenu (uint16_t address)
-{
-    // make alarm menu screen
-    // hh:dd
-    // Mo Di Mi Do Fr Sa So
-    // w/ some kind of selection for weekday
-    // Light y/n
-    // Sound
-}
-
-/*bool setAlarms ()
-{
-    
-    if (isrButtonC) {
-      isrButtonC = false;
-      sleepTimer = millis();
-      delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-      return true;
-    }
-    if (changeValue) {
-        switch case
-    } else {
-        
-    }
-    return false;
-}*/
 
 // Check if an alarm must be triggered
 bool checkAlarms () {	
