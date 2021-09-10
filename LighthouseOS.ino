@@ -120,6 +120,7 @@ Date "11.09.2021":
 #define ALARM_ITEMS 4
 #define ALARMTIME_ITEMS 4
 #define CLOCK_ITEMS 4
+#define ALARM_MODES 5		// Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 
 #define LITE 200  // standard brightness
 
@@ -245,10 +246,10 @@ uint8_t brightness = LITE;
 struct alarms {
     uint8_t hh;
     uint8_t mm;
-    uint8_t dd;			// Not used, outside of read and write FRAM
-    bool act;			// Not used, outside of read and write FRAM
-    bool light;			// Not used, outside of read and write FRAM
-    uint8_t soundfile;	// Not used, outside of read and write FRAM
+    uint8_t dd;			// Not used outside of read and write FRAM
+    bool act;			// Not used outside of read and write FRAM
+    bool light;			// Not used outside of read and write FRAM
+    uint8_t soundfile;	// Not used outside of read and write FRAM
     time_t nextAlarm; // Time stamp of next alarm. Will not be stored on FRAM
 	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
@@ -293,11 +294,11 @@ void setup(void) {
     S0->addTransition(&toSleep,S1);         // to standby
     S0->addTransition(&openMainMenu,S2);    // to main menu
     S0->addTransition(&changeToWeddingMode,S3); //start wedding mode
-	//S0->addTransition(&startAlarm,S99); // check and start alarm
+	S0->addTransition(&startAlarm,S99); // check and start alarm
     S0->addTransition(&reAttachUnhandledInterrupts,S0);   //Must be last item
     // from standby
     S1->addTransition(&wakeup,S0);          // to clock
-	//S1->addTransition(&startAlarm,S99); // check and start alarm
+	S1->addTransition(&startAlarm,S99); // check and start alarm
     // from main menu
     S2->addTransition(&returnToClockDisplay,S0); //After timeout
     S2->addTransition(&closeMainMenu,S0);   // to clock
@@ -310,7 +311,7 @@ void setup(void) {
     S2->addTransition(&openBrigthnessMenu,S9);
     S2->addTransition(&openHomingMenu,S10);
     S2->addTransition(&openCreditsMenu,S11);
-	//S2->addTransition(&startAlarm,S99); // check and start alarm
+	S2->addTransition(&startAlarm,S99); // check and start alarm
     //S2->addTransition(&anyButtonPressed,S2);   //Must be last item
     // from wedding mode
     S3->addTransition(&exitWeddingMode,S0);
@@ -320,40 +321,40 @@ void setup(void) {
     S4->addTransition(&returnToMainMenu,S2);
     S4->addTransition(&saveReturnToMainMenu,S2);
     S4->addTransition(&changeSubMenuSelection,S4);
-    //S4->addTransition(&startAlarm,S99); // check and start alarm
+    S4->addTransition(&startAlarm,S99); // check and start alarm
     //Alarm1 Menu
     S5->addTransition(&returnToClockDisplay,S0); //After timeout
     S5->addTransition(&returnToMainMenu,S2);
     S5->addTransition(&saveReturnToMainMenu,S2);
-	//S5->addTransition(&startAlarm,S99); // check and start alarm    
+	S5->addTransition(&startAlarm,S99); // check and start alarm    
     //Alarm2 Menu
     S6->addTransition(&returnToClockDisplay,S0); //After timeout
     S6->addTransition(&returnToMainMenu,S2);
     S6->addTransition(&saveReturnToMainMenu,S2);
-	//S6->addTransition(&startAlarm,S99); // check and start alarm
+	S6->addTransition(&startAlarm,S99); // check and start alarm
     //Sound Menu
     S7->addTransition(&returnToClockDisplay,S0); //After timeout
     S7->addTransition(&returnToMainMenu,S2);
     S7->addTransition(&saveReturnToMainMenu,S2);
-	//S7->addTransition(&startAlarm,S99); // check and start alarm
+	S7->addTransition(&startAlarm,S99); // check and start alarm
     //Volumne Menu
     S8->addTransition(&returnToClockDisplay,S0); //After timeout
     S8->addTransition(&returnToMainMenu,S2);
     S8->addTransition(&saveReturnToMainMenu,S2);
-	//S8->addTransition(&startAlarm,S99); // check and start alarm
+	S8->addTransition(&startAlarm,S99); // check and start alarm
     //Brightness Menu
     S9->addTransition(&returnToClockDisplay,S0); //After timeout
     S9->addTransition(&returnToMainMenu,S2);
     S9->addTransition(&saveReturnToMainMenu,S2);
-	//S9->addTransition(&startAlarm,S99); // check and start alarm
+	S9->addTransition(&startAlarm,S99); // check and start alarm
     //Homing Menu
     S10->addTransition(&returnToClockDisplay,S0); //After timeout
     S10->addTransition(&anyButtonPressed,S2);
-	//S10->addTransition(&startAlarm,S99); // check and start alarm
+	S10->addTransition(&startAlarm,S99); // check and start alarm
     //Credits Menu
     S11->addTransition(&returnToClockDisplay,S0); //After timeout
 	S11->addTransition(&anyButtonPressed,S2);
-	//S11->addTransition(&startAlarm,S99); // check and start alarm
+	S11->addTransition(&startAlarm,S99); // check and start alarm
 
 	// Stop alarm and return to clock
 	S99->addTransition(&stopAlarm,S2);
@@ -576,7 +577,7 @@ void drawClockDisplayInfo(){
     tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 }
 
-// standby state
+// S1 = standby state
 void stateStandby()
 {
     //nothing yet maybe send arduino to sleep
@@ -612,8 +613,7 @@ void stateAlarmActive()
 		/////////////////////////////////////
 }
 
-//S1
-// main menu
+//S2 = main menu
 void stateMainMenu()
 {
     if (updateScreen) {
@@ -634,6 +634,11 @@ void stateMainMenu()
         updateMenuSelection = false;
         }
     }
+	// Switch off tower light (if left on in other states like S11, Credits or S0)
+	if (alarmLightOn){ // if light is still on
+		alarmLightOn = false; 						// Turn on light flag
+		analogWrite(LED_MAIN, 0);					// Switch tower light
+	}
 }
 
 void drawMenuTop(char *menuName)
@@ -712,9 +717,27 @@ void stateClockMenu()
     }
 }
 
-
+// Draw menu to set alarms 
 void drawAlarmMenu(){
-
+if (updateScreen) {
+        updateMenuSelection = true;
+    }
+    if (updateMenuSelection){
+        updateMenuSelection = false;
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        uint8_t underline = 0;
+		// Draw time and mark selected item
+        if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
+            if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
+            drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
+        }
+        cursorY = cursorY + canvasSmallFont.height();
+        // Draw mode
+		updateCanvasText(canvasSmallFont, almModes[submenu.item[2]], submenu.selectedItem==2)
+		tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+        updateScreen = false;
+    }
 }
 
 //S5
@@ -727,9 +750,6 @@ void stateAlarm1Menu()
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     drawAlarmMenu();
-    //Set Alarm1
-    //Select Alarm Sound
-    //Select if lights should be on
 }
 
 //S6
@@ -742,9 +762,6 @@ void stateAlarm2Menu()
         tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
     }
     drawAlarmMenu();
-    //Set Alarm2
-    //Select Alarm Sound
-    //Select if lights should be on
 }
 
 //S7
@@ -809,8 +826,18 @@ void stateCreditsMenu()
         tft.println("  Frauke, Christian, Hans &");
         tft.println("  Ben");
         set_default_font();
-        //ToDo Turn on Main Lights and Motor
     }
+	// Switch on and off the tower LED
+	if (millis() - alarmLightTimer > alarmLightDelay) {
+		alarmLightTimer = millis();								// Restart timer
+		alarmLightOn = not alarmLightOn;						// Switch state of light
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+	}
+	// Move the tower in full revs
+	if (stepperActive == false){								// Only command a new movemoent if nothing is running
+		stepperActive	= true;									// Set flag to make sure no other movement is commanded
+		stepper.newMoveDegreesCCW(360);							// Command one full rev
+	}
 }
 
 //StateMachine Transitions
@@ -907,6 +934,7 @@ bool stopAlarm()
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
 	  analogWrite(LED_MAIN, 0); 			// Switch off tower light
+	  alarmLightOn = false;					// Switch off tower light (flag)
 	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
@@ -927,7 +955,10 @@ bool startAlarm()
 		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
-		alarmTotalTimer = millis();			// Start timer
+		alarmTotalTimer = mills();				// Start timer for max alarm time
+		alarmLightTimer = millis();				// Start timer for light
+		alarmLightOn = true;					// Switch on tower light (flag)
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
 		/////////////////////////////////////
 		// TODO
 		// Start MP3-Player
@@ -1017,10 +1048,14 @@ bool openHomingMenu()
     return false;
 }
 
+// Credits (with tower light on)
 bool openCreditsMenu()
 {
     if (isrButtonC  && (selectedMMItem == 7)){
         openSuBMenu();
+		alarmLightTimer = millis();				// Start timer for light
+		alarmLightOn = true;					// Switch on tower light (flag)
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
         return true;   
     }
     return false;
@@ -1123,19 +1158,28 @@ void openSuBMenu()
             submenu.item[2] = day(isrTime);
             submenu.item[3] = month(isrTime);
             submenu.item[4] = year(isrTime);
-            submenu.item[5] = settingClock;
-            submenu.maxVal[5] = CLOCK_ITEMS;
+            submenu.item[5] = clockOption;
+			// TODO: Max and min for clockOption missing!?!?
             break;
-        case 1:
-            submenu.num_items = 6;
-            submenu.timeinfo_starts = 0;
-            submenu.item[0] = hour(isrTime);
-            submenu.item[1] = minute(isrTime);
-            submenu.item[2] = day(isrTime);
-            submenu.item[3] = month(isrTime);
-            submenu.item[4] = year(isrTime);
-            submenu.item[5] = settingClock;
-            submenu.maxVal[5] = CLOCK_ITEMS;
+		case 1:
+            //Alarm1
+            submenu.num_items = 2; // 3 Items
+            submenu.timeinfo_starts = 0; // Only time, no date
+            submenu.item[0] = alm1.hh;
+            submenu.item[1] = alm1.mm;
+            submenu.item[2] = alm1.mode;
+			submenu.maxVal[2] = 4;
+			submenu.minVal[2] = 0;
+            break;
+		case 2:
+            //Alarm2
+            submenu.num_items = 2; // 3 Items
+            submenu.timeinfo_starts = 0; // Only time, no date
+            submenu.item[0] = alm2.hh;
+            submenu.item[1] = alm2.mm;
+            submenu.item[2] = alm2.mode;
+			submenu.maxVal[2] = 4;
+			submenu.minVal[2] = 0;
             break;
         case 8:
             //Credits
@@ -1676,33 +1720,6 @@ void buttonL()
 // Alarm functions
 //////////////////////////////////////////////////////
 // Note: Saving changes in the alarms and recalculation the next alarm is done in saveReturnToMainMenu
-void setAlarmMenu (uint16_t address)
-{
-    // make alarm menu screen
-    // hh:dd
-    // Mo Di Mi Do Fr Sa So
-    // w/ some kind of selection for weekday
-    // Light y/n
-    // Sound
-}
-
-/*bool setAlarms ()
-{
-    
-    if (isrButtonC) {
-      isrButtonC = false;
-      sleepTimer = millis();
-      delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-      return true;
-    }
-    if (changeValue) {
-        switch case
-    } else {
-        
-    }
-    return false;
-}*/
 
 // Check if an alarm must be triggered
 bool checkAlarms () {	
