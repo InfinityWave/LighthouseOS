@@ -118,9 +118,8 @@ Date "11.09.2021":
 #define SUBMENU_MAX_ITEMS 8
 #define SOUND_ITEMS 3
 #define ALARM_ITEMS 4
-#define ALARMTIME_ITEMS 4
-#define CLOCK_ITEMS 4
-#define ALARM_MODES 5		// Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
+#define ALARMTIME_ITEMS 5 // Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
+#define CLOCK_ITEMS 4		
 
 #define LITE 200  // standard brightness
 
@@ -205,7 +204,7 @@ volatile bool isrButtonR = false;
 // menu entries
 const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
 const char *soundOptions[SOUND_ITEMS] = {"Horn", "Wedding", "Off"};
-const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Always", "Mo-Fr", "Sa+So", "Off"};
+const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Single" ,"Always", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor only", "Off"};
 
     // Read settings from FRAM
@@ -1110,6 +1109,9 @@ bool saveReturnToMainMenu()
                 break;
             case 1:
                 //Alarm 1 menu
+				alm1.hh = submenu.item[0];
+				alm1.mm = submenu.item[1];
+				alm1.mode = submenu.item[2];
                 // Write alarms to FRAM
                 writeAlarms(FRAM_ALARM1, alm1);
                 // Update Alarms for next call
@@ -1117,6 +1119,9 @@ bool saveReturnToMainMenu()
                 break;
             case 2:
                 //Alarm 2 menu
+				alm2.hh = submenu.item[0];
+				alm2.mm = submenu.item[1];
+				alm2.mode = submenu.item[2];
                 // Write alarms to FRAM
                 writeAlarms(FRAM_ALARM2, alm2);
                 // Update Alarms for next call
@@ -1160,6 +1165,7 @@ void openSuBMenu()
             submenu.item[4] = year(isrTime);
             submenu.item[5] = settingClock;
 			// TODO: Max and min for clockOption missing!?!?
+			// ToDo: Kick settingClock from project
             break;
 		case 1:
             //Alarm1
