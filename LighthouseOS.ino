@@ -734,7 +734,7 @@ if (updateScreen) {
         }
         cursorY = cursorY + canvasSmallFont.height();
         // Draw mode
-		updateCanvasText(canvasSmallFont, almModes[submenu.item[2]], submenu.selectedItem==2)
+		updateCanvasText(canvasSmallFont, alarmTimeOptions[submenu.item[2]], submenu.selectedItem==2);
 		tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         updateScreen = false;
     }
@@ -955,7 +955,7 @@ bool startAlarm()
 		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
-		alarmTotalTimer = mills();				// Start timer for max alarm time
+		alarmTotalTimer = millis();				// Start timer for max alarm time
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
 		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
@@ -1158,7 +1158,7 @@ void openSuBMenu()
             submenu.item[2] = day(isrTime);
             submenu.item[3] = month(isrTime);
             submenu.item[4] = year(isrTime);
-            submenu.item[5] = clockOption;
+            submenu.item[5] = settingClock;
 			// TODO: Max and min for clockOption missing!?!?
             break;
 		case 1:
