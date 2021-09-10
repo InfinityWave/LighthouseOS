@@ -10,8 +10,8 @@
 #include <Adafruit_ILI9341.h>// Controller specific library
 #include <CheapStepper.h> //https://github.com/H4K5M6/CheapStepper
 #include <Fonts/FreeSans12pt7b.h>
-#include <Fonts/FreeSans18pt7b.h>
-#include "Adresses.h"
+//#include <Fonts/FreeSans18pt7b.h>
+#include "Adresses.h"  // FRAM Adresses
 
 //DS3231 pins
 #define DS3231_INT 3      // interrupt
@@ -59,6 +59,7 @@
 Number "88":
 12pt size 1: 24x17 
 12pt size 2: 48x34
+12pt size 3: 72x51
 18pt size 1: 36x25 
 18pt size 2: 72x50
 Date "11.09.2021":
@@ -68,10 +69,10 @@ Date "11.09.2021":
 18pt size 2: 296x50
 */
 // TFT&Canvas Settings
-#define FONTSIZE_BIG_HEIGHT 50
+#define FONTSIZE_BIG_HEIGHT 51
 #define FONTSIZE_NORMAL_HEIGHT 34
-#define FONTSIZE_SMALL_HEIGHT 25
-#define FONTSIZE_TINY_HEIGHT 17
+#define FONTSIZE_SMALL_HEIGHT 17
+//#define FONTSIZE_TINY_HEIGHT 17
 #define FONT_MARGIN 4
 #define CANVAS_CLOCK_WIDTH 76
 #define CANVAS_DATE_WIDTH 232
@@ -82,35 +83,34 @@ Date "11.09.2021":
 #define TFT_MARGIN_BOT 25
 // Canvas Settings for Left and Right Menu Icons
 #define CANVAS_MENULR_WIDTH 45
-#define CANVAS_MENULR_HEIGHT 30
-#define CANVAS_MENULR_ICONOFFSET 12
+#define CANVAS_MENULR_HEIGHT 25
 //Global Position for Icon Canvas
-#define CANVAS_MENUL_X 5
-#define CANVAS_MENUL_Y 7
-#define CANVAS_MENUR_X 235
-#define CANVAS_MENUR_Y 7
-#define CENTER_ICON_X 135
-#define CENTER_ICON_Y 13
-#define CENTER_ICON_SIZE 12
-#define CENTER_ICON_LW 4
+#define CANVAS_MENULR_ICONOFFSET 12
+#define CANVAS_MENUL_X 5 //Left Setter Icon X-POS
+#define CANVAS_MENUL_Y 5 //Left Setter Icon Y-POS
+#define CANVAS_MENUR_X 235 //Right Setter Icon X-POS
+#define CANVAS_MENUR_Y 0 //Left Setter Icon Y-POS
+#define CENTER_ICON_X 135 //Center Icon X-POS
+#define CENTER_ICON_Y 13  //Center Icon Y-POS
+#define CENTER_ICON_SIZE 12 //Center icon Size
+#define CENTER_ICON_LW 4  //Linwidth of center icon
 //ClockDisplaySettings
-#define CLOCKDISPLAY_CLOCK_X 55
-#define CLOCKDISPLAY_CLOCK_Y 55
-#define CLOCKDISPLAY_DATE_X 35
-#define CLOCKDISPLAY_DATE_Y 125
-#define CLOCKDISPLAY_LH_X 0
-#define CLOCKDISPLAY_SYNC_X 175
-#define CLOCKDISPLAY_TEMP_X 245
+#define CLOCKDISPLAY_CLOCK_X 55 //Clock on std. display X-pos
+#define CLOCKDISPLAY_CLOCK_Y 60 //Clock on std. display Y-pos
+#define CLOCKDISPLAY_DATE_X 35  //Date on std. display X-pos
+#define CLOCKDISPLAY_DATE_Y 125 //Date on std. display Y-pos
+#define CLOCKDISPLAY_LH_X 0 //LighthouseOS txt Position on std. Display
+#define CLOCKDISPLAY_SYNC_X 175 //DCF Sync Status X_pos on std. display
+#define CLOCKDISPLAY_TEMP_X 245  //Temp. display x-pos on std. display
 
 //MenuSettings
-#define MENULINEWIDTH 3
-#define MENU_TOPLINE_Y 43
-#define MENU_ITEMS 3
-#define MENU_ITEMS_X 35
-#define MENU_ITEM1_Y 80
-#define MENU_SEL_X 10
-#define MENU_SEL_Y 150
-#define MENU_SEL_SIZE 5
+#define MENULINEWIDTH 3  // Standard Linewidth for all lines
+#define MENU_TOPLINE_Y 50 // Position of the Topmost line. All other items are adjusted according to this
+#define MENU_ITEMS 4  // Num Items to Display
+#define MENU_ITEMS_X 15  // X-Offset for Items
+#define MENU_SEL_X 10  //Selector Icon X-Pos
+#define MENU_SEL_Y 133 //Selector Icon Y-Pos
+#define MENU_SEL_SIZE 5 //Selector Icon Size
 //SpecialMenuSettings
 #define MAINMENU_ITEMS 9    // number of menu entries
 #define MAINMENU_TXT_X 120
@@ -140,9 +140,10 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuItem(180, FONTSIZE_SMALL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
-GFXcanvas1 canvasTinyFont(220, FONTSIZE_TINY_HEIGHT+3*FONT_MARGIN);
 GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
+GFXcanvas1 canvasNormalFont(160, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
+GFXcanvas1 canvasSmallFont(200, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
+
 
 //Variables to store size of display/canvas texts
 int16_t  x1, y1;
@@ -323,18 +324,18 @@ void setup(void) {
     //Clock Menu
     S4->addTransition(&returnToClockDisplay,S0); //After timeout
     S4->addTransition(&returnToMainMenu,S2);
-    S7->addTransition(&saveReturnToMainMenu,S2);
+    S4->addTransition(&saveReturnToMainMenu,S2);
     S4->addTransition(&changeSubMenuSelection,S4);
     S4->addTransition(&startAlarm,S99); // check and start alarm
     //Alarm1 Menu
     S5->addTransition(&returnToClockDisplay,S0); //After timeout
     S5->addTransition(&returnToMainMenu,S2);
-    S7->addTransition(&saveReturnToMainMenu,S2);
+    S5->addTransition(&saveReturnToMainMenu,S2);
 	S5->addTransition(&startAlarm,S99); // check and start alarm    
     //Alarm2 Menu
     S6->addTransition(&returnToClockDisplay,S0); //After timeout
     S6->addTransition(&returnToMainMenu,S2);
-    S7->addTransition(&saveReturnToMainMenu,S2);
+    S6->addTransition(&saveReturnToMainMenu,S2);
 	S6->addTransition(&startAlarm,S99); // check and start alarm
     //Sound Menu
     S7->addTransition(&returnToClockDisplay,S0); //After timeout
@@ -344,12 +345,12 @@ void setup(void) {
     //Volumne Menu
     S8->addTransition(&returnToClockDisplay,S0); //After timeout
     S8->addTransition(&returnToMainMenu,S2);
-    S7->addTransition(&saveReturnToMainMenu,S2);
+    S8->addTransition(&saveReturnToMainMenu,S2);
 	S8->addTransition(&startAlarm,S99); // check and start alarm
     //Brightness Menu
     S9->addTransition(&returnToClockDisplay,S0); //After timeout
     S9->addTransition(&returnToMainMenu,S2);
-    S7->addTransition(&saveReturnToMainMenu,S2);
+    S9->addTransition(&saveReturnToMainMenu,S2);
 	S9->addTransition(&startAlarm,S99); // check and start alarm
     //Homing Menu
     S10->addTransition(&returnToClockDisplay,S0); //After timeout
@@ -371,17 +372,23 @@ void setup(void) {
     tft.setRotation(3);
     tft.fillScreen(COLOR_BKGND);
     set_default_font();
-    canvasClock.setFont(&FreeSans18pt7b);
-    canvasClock.setTextSize(2);
+    //canvasClock.setFont(&FreeSans18pt7b);
+    //canvasClock.setTextSize(2);
+    canvasClock.setFont(&FreeSans12pt7b);
+    canvasClock.setTextSize(3);
+    
     canvasDate.setFont(&FreeSans12pt7b);
     canvasDate.setTextSize(2);
-    canvasMenuLR.setFont(&FreeSans18pt7b);
-    canvasMenuLR.setTextSize(2);
-    canvasTinyFont.setFont(&FreeSans12pt7b);
-    canvasTinyFont.setTextSize(1);
-    canvasMenuItem.setFont(&FreeSans18pt7b);
-    canvasMenuItem.setTextSize(1);
-    
+    //canvasMenuLR.setFont(&FreeSans18pt7b);
+    //canvasMenuLR.setTextSize(2);
+    canvasMenuLR.setFont(&FreeSans12pt7b);
+    canvasMenuLR.setTextSize(3);
+    canvasSmallFont.setFont(&FreeSans12pt7b);
+    canvasSmallFont.setTextSize(1);
+    //canvasNormalFont.setFont(&FreeSans18pt7b);
+    //canvasNormalFont.setTextSize(1);
+    canvasNormalFont.setFont(&FreeSans12pt7b);
+    canvasNormalFont.setTextSize(2);    
 
     brightness = LITE; //set brightness
     
@@ -411,8 +418,8 @@ void setup(void) {
 
 	// Read stored alarms from FRAM
 	///////////////////////////////////
-    readAlarms(ALARM1, alm1);
-    readAlarms(ALARM2, alm2);
+    readAlarms(FRAM_ALARM1, alm1);
+    readAlarms(FRAM_ALARM2, alm2);
 	
 	// Set time value for alarms
 	////////////////////////////////////
@@ -421,7 +428,7 @@ void setup(void) {
 	recalcAlarm(alm2);
 	// Init Stepper
 	//////////////////////////////////
-    stepper.setStep(read16bit(C_STEP));
+    stepper.setStep(read16bit(FRAM_C_STEP));
     
     // Buttons interrupt setup
     pinMode(BTN_C, INPUT_PULLUP);
@@ -497,7 +504,7 @@ void loop()
 }
 
 void set_default_font(){
-    tft.setFont(&FreeSans18pt7b);
+    tft.setFont(&FreeSans12pt7b);
     tft.setTextSize(1);
 }
 
@@ -544,28 +551,28 @@ void drawClockDisplayInfo(){
     tempChanged = false;
     DCFSyncChanged = false;
     
-    int16_t ypos = TFT_HEIGHT - TFT_MARGIN_BOT - canvasTinyFont.height();
+    int16_t ypos = TFT_HEIGHT - TFT_MARGIN_BOT - canvasSmallFont.height();
      
     tft.fillRect(0, ypos-MENULINEWIDTH, TFT_WIDTH, MENULINEWIDTH, COLOR_TXT);
 
-    canvasTinyFont.fillScreen(COLOR_BKGND);
-    canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
-    canvasTinyFont.print("LighthouseOS");
-    tft.drawBitmap(CLOCKDISPLAY_LH_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+    canvasSmallFont.fillScreen(COLOR_BKGND);
+    canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
+    canvasSmallFont.print("LighthouseOS");
+    tft.drawBitmap(CLOCKDISPLAY_LH_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 
     if (DCFSyncStatus){
-        canvasTinyFont.fillScreen(COLOR_BKGND);
-        canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
-        canvasTinyFont.print("DCF");
-        tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+        canvasSmallFont.fillScreen(COLOR_BKGND);
+        canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
+        canvasSmallFont.print("DCF");
+        tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
     }
-    canvasTinyFont.fillScreen(COLOR_BKGND);
-    canvasTinyFont.setCursor(0, FONTSIZE_TINY_HEIGHT+FONT_MARGIN);
+    canvasSmallFont.fillScreen(COLOR_BKGND);
+    canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
     sprintf(outString, "%d", (int)currentTemp);
-    canvasTinyFont.print(outString);
-    //canvasTinyFont.print((char)247); //Not supported by non standard Font
-    canvasTinyFont.print("C");
-    tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasTinyFont.getBuffer(), canvasTinyFont.width(), canvasTinyFont.height(), COLOR_TXT, COLOR_BKGND);
+    canvasSmallFont.print(outString);
+    //canvasSmallFont.print((char)247); //Not supported by non standard Font
+    canvasSmallFont.print("C");
+    tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 }
 
 // S1 = standby state
@@ -618,11 +625,11 @@ void stateMainMenu()
         for (int i=0; i<MENU_ITEMS; i++){
             sprintf(outString, "Item %d: %d", i, ((selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS));
             Serial.println(outString);
-            canvasMenuItem.fillScreen(COLOR_BKGND);
-            canvasMenuItem.setCursor(0,FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
-            canvasMenuItem.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
-            tft.drawBitmap(TFT_MARGIN_LEFT+MENU_ITEMS_X, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
-            cursorY = cursorY + canvasMenuItem.height();
+            canvasSmallFont.fillScreen(COLOR_BKGND);
+            canvasSmallFont.setCursor(0,FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
+            canvasSmallFont.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
+            tft.drawBitmap(TFT_MARGIN_LEFT+MENU_ITEMS_X, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+            cursorY = cursorY + canvasSmallFont.height();
         }
     }
 	// Switch off tower light (if left on in other states like S11, Credits or S0)
@@ -651,6 +658,7 @@ void drawMenuTop(char *menuName)
 //S3
 void stateWeddingMode()
 {
+    // TODO
     //Switch Music On
     //Switch Motor On
     //Switch Main Light On
@@ -672,27 +680,27 @@ void stateClockMenu()
         uint8_t underline = 0;
         if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
             if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
-            drawClock(canvasMenuItem, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
+            drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
         }
-        cursorY = cursorY + canvasMenuItem.height();
+        cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==2 || submenu.selectedItem==3 || submenu.selectedItem==4){
             if (submenu.selectedItem==2 || submenu.selectedItem==3 || submenu.selectedItem==4){
                 underline=submenu.selectedItem-1;
                 }       
-            updateCanvasDate(canvasMenuItem, submenu.item[2], submenu.item[3], submenu.item[4], underline);
-            tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
+            updateCanvasDate(canvasSmallFont, submenu.item[2], submenu.item[3], submenu.item[4], underline);
+            tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
          }
-        cursorY = cursorY + canvasMenuItem.height();/*
+        cursorY = cursorY + canvasSmallFont.height();/*
         if (updateScreen || submenu.selectedItem==5){
-            canvasMenuItem.fillScreen(COLOR_BKGND);
-            canvasMenuItem.setCursor(0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH);
-            canvasMenuItem.println(clockOptions[submenu.item[5]]);
+            canvasSmallFont.fillScreen(COLOR_BKGND);
+            canvasSmallFont.setCursor(0, canvasSmallFont.height()-FONT_MARGIN-MENULINEWIDTH);
+            canvasSmallFont.println(clockOptions[submenu.item[5]]);
             if (submenu.selectedItem==5){
-                canvasMenuItem.getTextBounds(clockOptions[submenu.item[5]], 0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-                canvasMenuItem.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
+                canvasSmallFont.getTextBounds(clockOptions[submenu.item[5]], 0, canvasSmallFont.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
+                canvasSmallFont.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
             }
-            tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
-            //updateCanvasText(canvasMenuItem, soundOptions[submenu.item[5]],
+            tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+            //updateCanvasText(canvasSmallFont, soundOptions[submenu.item[5]],
         }*/
 
 
@@ -791,7 +799,7 @@ void stateCreditsMenu()
         updateScreen = false;   
         tft.setFont(&FreeSans12pt7b);
         tft.setTextSize(1);
-        tft.setCursor(0, cursorYMenuStart+FONTSIZE_TINY_HEIGHT);
+        tft.setCursor(0, cursorYMenuStart+FONTSIZE_SMALL_HEIGHT);
         tft.println("  Not All Who Wander");
         tft.println("  Are Lost!");
         //tft.setFont();
@@ -864,6 +872,7 @@ bool changeMainMenuSelection()
 {
     if(isrButtonR){
         isrButtonR = false;
+        sleepTimer = millis();
         updateMenuSelection = true;
         selectedMMItem = (selectedMMItem+1)%MAINMENU_ITEMS;
         delay(50);
@@ -872,6 +881,7 @@ bool changeMainMenuSelection()
     }
     if(isrButtonL){
         isrButtonL = false;
+        sleepTimer = millis();
         updateMenuSelection = true;
         selectedMMItem = (selectedMMItem+MAINMENU_ITEMS-1)%MAINMENU_ITEMS;
         delay(50);
@@ -902,7 +912,7 @@ bool closeMainMenu()
 bool stopAlarm()
 {
 	// Stop-Alam button was pressed OR on timeout
-	if ((isrButtonL)||(mills()-alarmTotalTimer > alarmTotalDelay)) {
+	if ((isrButtonL)||(millis()-alarmTotalTimer > alarmTotalDelay)) {
       isrButtonL = false;		// Reset Btn-flag
       isrTimeUpdate = true;		// ??
       delay(50);
@@ -982,8 +992,8 @@ bool saveReturnToMainMenu()
         sleepTimer = millis();
         isrButtonC = false;
         // Write alarms to FRAM
-		writeAlarms(0, alm1);
-		writeAlarms(alm2);
+		writeAlarms(FRAM_ALARM1, alm1);
+		writeAlarms(FRAM_ALARM2, alm2);
 		// Update Alarms for next call
 		recalcAlarm(alm1);
 		recalcAlarm(alm2);
@@ -1075,17 +1085,16 @@ bool openCreditsMenu()
 
 void updateSubMenuCenterIcon()
 {
+    sprintf(outString, "Item %d of  %d", submenu.selectedItem, submenu.num_items);
+    Serial.println(outString);
     if (submenu.selectedItem==(submenu.num_items+1)){
-        Serial.println("Draw Setter 16");
         drawMenuSetter(16);
     }
     if (submenu.selectedItem==submenu.num_items){
         drawMenuSetter(8);
-        Serial.println("8");
     }
     if (submenu.selectedItem<submenu.num_items){
         drawMenuSetter(4);
-        Serial.println("4");
     }
 }
 
@@ -1130,6 +1139,7 @@ bool changeSubMenuSelection()
 {
     if (isrButtonC){
         isrButtonC = false;
+        sleepTimer = millis();
         submenu.selectedItem = (submenu.selectedItem + 1) % (submenu.num_items+2);  
         updateScreen = true;
         updateSubMenuCenterIcon();
@@ -1139,6 +1149,7 @@ bool changeSubMenuSelection()
     }
     if (isrButtonL || isrButtonR) {
         // Check if is one of last two items, then only decrement/increment selection
+        sleepTimer = millis();
         if (submenu.selectedItem >= submenu.num_items){
             if (isrButtonL){
                 isrButtonL = false;
@@ -1292,6 +1303,7 @@ bool anyButtonPressed()
         buttonPressed = true;
     }
     if (buttonPressed){
+        sleepTimer = millis();
         clearTFT();
         return true;
     }
@@ -1454,10 +1466,10 @@ void drawMenuSetter(uint8_t isOn)
     }
     if (isOn & 4){
         // Center Icon
-        canvasMenuItem.fillScreen(COLOR_BKGND);
-        cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)(canvasMenuItem.width()/2);
-        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasMenuItem.height()/2);
-        tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), COLOR_TXT, COLOR_BKGND);
+        canvasSmallFont.fillScreen(COLOR_BKGND);
+        cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)(canvasSmallFont.width()/2);
+        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasSmallFont.height()/2);
+        tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, COLOR_TXT);
         tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE-CENTER_ICON_LW, COLOR_BKGND);
     }
@@ -1470,17 +1482,17 @@ void drawMenuSetter(uint8_t isOn)
         }
         else {
             // Center Icon Cancel
-            sprintf(outString, "Cancel");
+            sprintf(outString, "Return");
             tcolor = COLOR_RED;
         }
-        canvasMenuItem.fillScreen(COLOR_BKGND);
-        canvasMenuItem.setCursor(0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH);
-        canvasMenuItem.getTextBounds(outString, 0, canvasMenuItem.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-        canvasMenuItem.println(outString);        
-        canvasMenuItem.fillRect(x1,canvasMenuItem.height()-FONT_MARGIN,w1,MENULINEWIDTH,tcolor);
+        canvasSmallFont.fillScreen(COLOR_BKGND);
+        canvasSmallFont.setCursor(0, canvasSmallFont.height()-FONT_MARGIN-MENULINEWIDTH);
+        canvasSmallFont.getTextBounds(outString, 0, canvasSmallFont.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
+        canvasSmallFont.println(outString);        
+        canvasSmallFont.fillRect(x1,canvasSmallFont.height()-FONT_MARGIN,w1,MENULINEWIDTH,tcolor);
         cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)((x1+w1)/2);
-        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasMenuItem.height()/2);
-        tft.drawBitmap(cursorX, cursorY, canvasMenuItem.getBuffer(), canvasMenuItem.width(), canvasMenuItem.height(), tcolor, COLOR_BKGND);
+        cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasSmallFont.height()/2);
+        tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), tcolor, COLOR_BKGND);
     }
 }
 
@@ -1682,7 +1694,7 @@ void recalcAlarm(struct alarms &alm){
 	
 	// 1st: Set alarm for today
 	tmElements_t myElements = {0, alm.mm, alm.hh, weekday(isrTime), day(isrTime), month(isrTime), year(isrTime)-1970 };
-	time_t alm.nextAlarm = makeTime(myElements);
+	alm.nextAlarm = makeTime(myElements);
 	// 2nd: Check Alarm is in the past or not allowed today
 	if (alm.mode<=2){ 						// Not related to weekdays
 		if (alm.nextAlarm < isrTime){		// If alarm is in the past...
