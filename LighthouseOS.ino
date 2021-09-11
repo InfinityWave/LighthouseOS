@@ -14,38 +14,38 @@
 #include "Adresses.h"  // FRAM Adresses
 
 //DS3231 pins
-#define DS3231_INT 3      // interrupt
+#define DS3231_INT 2      // interrupt
 
 //DCF77 pins
-#define DCF_PIN 2         // Connection pin to DCF 77 device, interrupt
+#define DCF_PIN 3         // Connection pin to DCF 77 device, interrupt
 #define DCF_EN_PIN 4      // Enable DCF77 module active low
 
 //TFT pins
 //use Hardware SPI NANO: SCK=13, MISO=12, MOSI=11 
 #define TFT_DC 9
 #define TFT_CS 8
-#define TFT_LITE 10 //PWM pin
+#define TFT_LITE -1 //PWM pin
 #define TFT_WIDTH 320
 #define TFT_HEIGHT 240
 //#define TFT_RESET 
 
 //Button pins
-#define BTN_C 5           //interrupt
-#define BTN_L 7           //interrupt
-#define BTN_R 6           //interrupt
+#define BTN_C 7           //interrupt
+#define BTN_L A1           //interrupt
+#define BTN_R A0           //interrupt
 
 //LED pins
-#define LED_BTN_C 0        //TODO Button LED
-#define LED_BTN_R 0        //TODO Button LED
-#define LED_BTN_L 0        //TODO Button LED
-#define LED_MAIN 0         //TODO PWM pin
+#define LED_BTN_C 6        //TODO Button LED
+#define LED_BTN_R 6        //TODO Button LED
+#define LED_BTN_L 6        //TODO Button LED
+#define LED_MAIN 5         //TODO PWM pin
 #define ALARM_LIGHT_MAX 0  //TODO Set
 
 // stepper pins
-#define STEP_IN1 A0
-#define STEP_IN2 A1
-#define STEP_IN3 A2
-#define STEP_IN4 A3
+#define STEP_IN1 A7
+#define STEP_IN2 A6
+#define STEP_IN3 A3
+#define STEP_IN4 A2
 
 //Parameters
 #define COLOR_BKGND ILI9341_BLACK // background color
@@ -136,9 +136,9 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
-GFXcanvas1 canvasNormalFont(160, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
-GFXcanvas1 canvasSmallFont(180, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
+GFXcanvas1 canvasMenuLR(10, CANVAS_MENULR_HEIGHT);
+GFXcanvas1 canvasNormalFont(10, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
+GFXcanvas1 canvasSmallFont(10, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
 
 
 
@@ -261,7 +261,7 @@ struct menuStruct {
     uint8_t selectedItem = 0;
     uint8_t currentVal = 0;
     int16_t item[SUBMENU_MAX_ITEMS];
-    int16_t prev_item[SUBMENU_MAX_ITEMS];
+    //int16_t prev_item[SUBMENU_MAX_ITEMS];
     int8_t dateinfo_starts;
     int8_t timeinfo_starts;
     uint8_t maxVal[SUBMENU_MAX_ITEMS];
@@ -479,6 +479,7 @@ void loop()
     if (dcfSync && DCF.getTime() != 0) {
         DCF.Stop();
         myRTC.set(DCF.getTime());
+        updateClock();
         digitalWrite(DCF_EN_PIN, HIGH);
         dcfSync = false;
         dcfSyncSucc = true;
@@ -665,7 +666,7 @@ void stateWeddingMode()
     //Switch Main Light On
     //Blink auxiliary lights
     //Display something
-    weddingModeFinished = true;
+    
 }
 
 //S4
@@ -700,6 +701,8 @@ void stateClockMenu()
             else {underline=false;}
             Serial.println("Displaying Option Text now");
             Serial.println(clockOptions[submenu.item[5]]);
+            Serial.println(submenu.item[5]);
+            Serial.println(settingClock);
             updateCanvasText(canvasSmallFont, clockOptions[submenu.item[5]], underline);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         }
@@ -1101,6 +1104,8 @@ bool saveReturnToMainMenu()
                 tmElements_t myElements = {0, submenu.item[1], submenu.item[0], 1, submenu.item[2], submenu.item[3], submenu.item[4]-1970 };
 	            time_t set_time = makeTime(myElements);
                 settingClock = submenu.item[5];
+                Serial.println("ClockSetting:");
+                Serial.println(settingClock);
                 write16bit(FRAM_CLOCK_SETTINGS, settingClock);
                 myRTC.set(set_time);            
                 DCFSyncStatus = false;
@@ -1164,28 +1169,27 @@ void openSuBMenu()
             submenu.item[3] = month(isrTime);
             submenu.item[4] = year(isrTime);
             submenu.item[5] = settingClock;
+            submenu.maxVal[5]=CLOCK_ITEMS;
 			// TODO: Max and min for clockOption missing!?!?
 			// ToDo: Kick settingClock from project
             break;
 		case 1:
             //Alarm1
-            submenu.num_items = 2; // 3 Items
+            submenu.num_items = 3; // 3 Items
             submenu.timeinfo_starts = 0; // Only time, no date
             submenu.item[0] = alm1.hh;
             submenu.item[1] = alm1.mm;
             submenu.item[2] = alm1.mode;
-			submenu.maxVal[2] = 4;
-			submenu.minVal[2] = 0;
+			submenu.maxVal[2] = ALARM_ITEMS;
             break;
 		case 2:
             //Alarm2
-            submenu.num_items = 2; // 3 Items
+            submenu.num_items = 3; // 3 Items
             submenu.timeinfo_starts = 0; // Only time, no date
             submenu.item[0] = alm2.hh;
             submenu.item[1] = alm2.mm;
             submenu.item[2] = alm2.mode;
-			submenu.maxVal[2] = 4;
-			submenu.minVal[2] = 0;
+			submenu.maxVal[2] = ALARM_ITEMS;
             break;
         case 8:
             //Credits
@@ -1232,9 +1236,9 @@ bool changeSubMenuSelection()
             updateSubMenuCenterIcon();
             return true;
         }
-        for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
+        /*for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
             submenu.prev_item[i] = submenu.item[i];
-        }
+        }*/
         // Handle normal increment of currently selected value
         updateMenuSelection = true;
         if (isrButtonL){
@@ -1249,23 +1253,43 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-    
+         Serial.println("Before Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
         // Correct date if enabled for this submenu
         if (submenu.dateinfo_starts >=0){
-            correct_date(submenu.item + submenu.dateinfo_starts);
+            // Check if selected item is a date
+            if ((submenu.dateinfo_starts <= submenu.selectedItem) && (submenu.dateinfo_starts+3 > submenu.selectedItem)){
+                correct_date(submenu.item + submenu.dateinfo_starts);
+        Serial.println("After Date Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
+                return true;
+            }
         }
         // Correct time if enabled for this submenu
         if (submenu.timeinfo_starts >=0){
-            correct_time(submenu.item + submenu.timeinfo_starts);
-        }
+            // Check if selected item is a time
+            if ((submenu.timeinfo_starts <= submenu.selectedItem) && (submenu.timeinfo_starts+2 > submenu.selectedItem)){
+                correct_time(submenu.item + submenu.dateinfo_starts);
+                return true;
+
+        Serial.println("After Time Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
+            }
+        }     
+        Serial.println("After Time/Date Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
         // Check Max Value
         if (submenu.item[submenu.selectedItem] > submenu.maxVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.minVal[submenu.selectedItem];
         }
+        Serial.println("After Max Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
         // Check Min Value
-        if (submenu.item[submenu.selectedItem] > submenu.minVal[submenu.selectedItem]){
+        if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.maxVal[submenu.selectedItem];
         }
+        Serial.println("After Min Corrections:");
+        Serial.println(submenu.item[submenu.selectedItem]);
         return true;
     }
     return false;
@@ -1284,28 +1308,23 @@ void correct_date(int16_t *date)
         leapyear = 1;
     }
     // Check month overflow
-    date[3] = date[3] % 12;
+    if (date[3] < 1){date[3] = 12;}
+    else{date[3] = date[3] % (12+1);}
     // check correct number of days for month
     // Begin with month with 31 days
-    if (date[3]==0 || date[3]==2 || date[3]==4 || date[3]==6 || date[3]==7 || date[3]==9 || date[3]==11){
-        while (date[2] < 0){
-            date[2] = 31 + date[2]; 
-        }
-        date[2] = date[2] % 31; 
+    if (date[3]==1 || date[3]==3 || date[3]==5 || date[3]==7 || date[3]==8 || date[3]==10 || date[3]==12){
+        if (date[2] < 1){date[2] = 31;}
+        else {date[2] = date[2] % (31+1);} 
     }
     // Month with 30 days
-    if (date[3]==3 || date[3]==5 || date[3]==8 || date[3]==10){
-        while (date[2] < 0){
-            date[2] = 30 + date[2]; 
-        }
-        date[2] = date[2] % 30;
+    if (date[3]==4 || date[3]==6 || date[3]==9 || date[3]==11){
+        if (date[2] < 1){date[2] = 30;}
+        else{date[2] = date[2] % (30+1);}
     }
     // February
-    if (date[3]==1){
-        while (date[2] < 0){
-            date[2] = 28 + leapyear + date[2]; 
-        }
-        date[2] = date[2] % (28 + leapyear);
+    if (date[3]==2){
+        if(date[2] < 1){date[2] = 28 + leapyear;}
+        else{date[2] = date[2] % (28 + leapyear +1);}
     }
     // Correct hour over and underflow
     correct_time(date);
@@ -1319,26 +1338,44 @@ void correct_time(int16_t *dtime)
     while (dtime[0] < 0){
         dtime[0] = dtime[0] + hours_per_day; 
     }
-    dtime[0] = dtime[0] % hours_per_day;
+    dtime[0] = dtime[0] % (hours_per_day);
     // Correct minute over and underflow
     while (dtime[1] < 0){
         dtime[1] = dtime[1] + 60; 
     }
-    dtime[1] = dtime[1] % 60;
+    dtime[1] = dtime[1] % (60);
 }
 
 bool changeToWeddingMode()
 {
-    return false;
+    if(isrButtonR){
+        isrButtonR = false;    
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+    
+        Serial.println("WeddingMode");
+        moveTower = true;
+        stepperActive = true;
+        stepper.newMoveDegreesCCW(360);
+        analogWrite(LED_MAIN, 255);
+    }
+    return true;
 }
 
 bool exitWeddingMode()
 {
-    if(weddingModeFinished){
-        weddingModeFinished = false;
-        return true;
+    if(isrButtonR){
+        isrButtonR = false;    
+        delay(50);
+        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+    
+        Serial.println("WeddingMode");
+        moveTower = false;
+        stepperActive = false;
+        //stepper.newMoveDegreesCCW(360);
+        analogWrite(LED_MAIN, 0);
     }
-    return false;
+   return true;
 }
 
 bool anyButtonPressed()
@@ -1661,7 +1698,7 @@ void drawNotImplementedMessage(){
     tft.setFont();
     tft.setCursor(0, cursorYMenuStart);
     tft.setTextSize(2);
-    tft.println("Hey Thomas, stellt sich raus du bist nicht einzige mit einem Deadline-Problem. Der Unterschied ist nur, wir koennen es nicht loesen! Dieses Problem bleibt also bei dir! :-)");
+    tft.println("Hey Thomas, stellt sich raus du bist nicht einzige mit einem Deadline-Problem. Der Unterschied ist nur, wir koennen es nicht loesen! https://github.com/InfinityWave/LighthouseOS/ :-)");
     set_default_font();
 }
 
