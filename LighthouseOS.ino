@@ -277,8 +277,7 @@ bool weddingModeFinished = false;
 
 void setup(void) {
     Serial.begin(9600);
-    Serial.println("Begin Startup");
-    
+   
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
     analogWrite(TFT_LITE, brightness);
@@ -365,17 +364,11 @@ void setup(void) {
 	S99->addTransition(&stopAlarm,S2);
 	S99->addTransition(&reAttachUnhandledInterrupts,S99);
 	
-    Serial.println("Begin Display startup");
     // TFT setup
     delay(500);
     tft.begin();
-    Serial.println("Display startup complete");
     tft.setTextColor(COLOR_TXT);
-    Serial.println("Set Color");
     tft.setRotation(3);
-    Serial.println("Rotation");
-    tft.fillScreen(COLOR_BKGND);
-    Serial.println("Screen filled");
     set_default_font();
     //canvasClock.setFont(&FreeSans18pt7b);
     //canvasClock.setTextSize(2);
@@ -409,19 +402,19 @@ void setup(void) {
     //myRTC.set(1631107034);
     updateClock();
     if(isrTime > 0)
-        Serial.println("RTC has set the system time");
+        Serial.println("RTC set system time");
     else
-        Serial.println("Unable to sync with the RTC");
+        Serial.println("Unable to sync with RTC");
         
     prepareClock();
 
     // initialize FRAM
     if (fram.begin()){// you can stick the new i2c addr in here, e.g. begin(0x51);
-        Serial.println("Found I2C FRAM");
+        Serial.println("Found FRAM");
         framAvailable = true;
     }
     else{
-        Serial.println("I2C FRAM not identified");
+        Serial.println("FRAM error");
         framAvailable = false;
     }
 
@@ -454,12 +447,8 @@ void setup(void) {
     pinMode(BTN_L, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
     update_temperature();
-    Serial.println("Startup Almost Complete");
     Serial1.begin(9600); //Hardware Serial for MP3
-    Serial.println("Startup Nearly Complete");
     myDFPlayer.begin(Serial1);
-    
-    Serial.println("Startup Complete");
 }
 
 void loop()
@@ -497,7 +486,7 @@ void loop()
         dcfSyncSucc = false;
         DCFSyncStatus = false;
         DCFSyncChanged = true;
-        Serial.println("Sync Failed");
+        //Serial.println("Sync Failed");
     }
     if (dcfSync && DCF.getTime() != 0) {
         DCF.Stop();
@@ -539,7 +528,7 @@ void set_default_font(){
 void stateClockDisplay()
 {
     if (updateScreen) {
-        Serial.println("Entering ClockDisplay");
+        //Serial.println("Entering ClockDisplay");
         updateScreen = false;
         updateClockSign = true;
         drawClockDisplayInfo();
@@ -721,7 +710,7 @@ void stateClockMenu()
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==5){
             //Serial.println("Displaying Option Text");
-            if (submenu.selectedItem==5) { underline=true; Serial.println("Underline");}
+            if (submenu.selectedItem==5) {underline=true;}
             else {underline=false;}
             //Serial.println("Displaying Option Text now");
             //Serial.println(clockOptions[submenu.item[5]]);
@@ -1378,12 +1367,12 @@ bool changeToWeddingMode()
         isrButtonR = false;    
         delay(100);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-        Serial.println("Entering WeddingMode");
+        //Serial.println("Entering WeddingMode");
         stepper.setRpm(STEP_RPM_FAST);
         moveTower = true;
         stepperActive = true;
         stepper.newMove(false, 36000);
-        Serial.println("Start Player");
+        //Serial.println("Start Player");
         analogWrite(LED_MAIN, 255);
         analogWrite(LED_BTN_C, 255);
         myDFPlayer.volume(settingVolume);
@@ -1396,7 +1385,7 @@ bool exitWeddingMode()
 {
     bool button_pressed = anyButtonPressed();
     if(button_pressed){
-        Serial.println("Exit WeddingMode");
+        //Serial.println("Exit WeddingMode");
         stepper.setRpm(STEP_RPM);
         analogWrite(LED_BTN_C, 0);
         myDFPlayer.stop();
