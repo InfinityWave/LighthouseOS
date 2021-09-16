@@ -1126,15 +1126,17 @@ bool saveReturnToMainMenu()
             case 0:
                 //ClockMenu
                 tmElements_t myElements = {0, submenu.item[1], submenu.item[0], 1, submenu.item[2], submenu.item[3], submenu.item[4]-1970 };
-	            time_t set_time = makeTime(myElements);
+	            time_t setTime = makeTime(myElements);
                 settingClock = submenu.item[5];
                 //Serial.println("ClockSetting:");
                 //Serial.println(settingClock);
                 framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                myRTC.set(set_time);            
+                isrTime = setTime;
+                myRTC.set(setTime);            
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
-                updateClock();
+                isrTimeChange = false;
+                isrTimeUpdate = true;
                 break;
             case 1:
                 //Alarm 1 menu
@@ -1486,9 +1488,9 @@ void updateCanvasText(GFXcanvas1& cCanvas, char *text, bool underline)
     cCanvas.println(text);
     if (underline)
     {
-        //Serial.println("Underlining Text");
         cCanvas.getTextBounds(text, 0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-        cCanvas.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
+        cCanvas.getTextBounds("8", 0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH, &x2, &y2, &w2, &h2);
+        cCanvas.fillRect(x1, y2+h2+1, w1, MENULINEWIDTH, COLOR_TXT);
     }
 }
 
