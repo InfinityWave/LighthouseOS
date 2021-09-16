@@ -138,9 +138,9 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC/*, TFT_RESET*/);
 
 GFXcanvas1 canvasClock(CANVAS_CLOCK_WIDTH, FONTSIZE_BIG_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Clock Numbers
 GFXcanvas1 canvasDate(CANVAS_DATE_WIDTH, FONTSIZE_NORMAL_HEIGHT+FONT_MARGIN+MENULINEWIDTH); // Canvas for Date
-GFXcanvas1 canvasMenuLR(10, CANVAS_MENULR_HEIGHT);
-GFXcanvas1 canvasNormalFont(10, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
-GFXcanvas1 canvasSmallFont(10, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
+GFXcanvas1 canvasMenuLR(CANVAS_MENULR_WIDTH, CANVAS_MENULR_HEIGHT);
+GFXcanvas1 canvasNormalFont(120, FONTSIZE_NORMAL_HEIGHT+3*FONT_MARGIN+MENULINEWIDTH); // Bigger Canvas not supported
+GFXcanvas1 canvasSmallFont(160, FONTSIZE_SMALL_HEIGHT+2*FONT_MARGIN+MENULINEWIDTH);
 
 
 
@@ -692,10 +692,12 @@ void stateClockMenu()
         cursorY = cursorYMenuStart;
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         uint8_t underline = 0;
+        // Draw Clock Setter
         if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
             if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
             drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
         }
+        // Draw Date Setter
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==2 || submenu.selectedItem==3 || submenu.selectedItem==4){
             switch (submenu.selectedItem){
@@ -707,6 +709,7 @@ void stateClockMenu()
             updateCanvasDate(canvasSmallFont, submenu.item[2], submenu.item[3], submenu.item[4], underline);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
          }
+        // Draw Clock Mode Setter
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==5){
             //Serial.println("Displaying Option Text");
