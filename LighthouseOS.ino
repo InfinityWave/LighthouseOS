@@ -173,6 +173,7 @@ State* S99 = machine.addState(&stateAlarmActive); // State for active alarm
 // Define Clock-HW
 ////////////////////////////////////////////////////////////
 DS3232RTC myRTC(false);
+bool rtcavailable;
 
 DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
 
@@ -401,10 +402,15 @@ void setup(void) {
     isrTimeChange = true;
     //myRTC.set(1631107034);
     updateClock();
-    if(isrTime > 0)
+    if(isrTime > 0){
         Serial.println("RTC set system time");
-    else
+        rtcavailable = true;
+    }
+    else{
         Serial.println("Unable to sync with RTC");
+        rtcavailable = false;
+    }
+        
         
     prepareClock();
 
@@ -490,7 +496,9 @@ void loop()
     }
     if (dcfSync && DCF.getTime() != 0) {
         DCF.Stop();
-        myRTC.set(DCF.getTime());
+        if (rtcavailable){
+            myRTC.set(DCF.getTime());
+        }
         updateClock();
         digitalWrite(DCF_EN_PIN, HIGH);
         dcfSync = false;
@@ -1118,17 +1126,18 @@ bool saveReturnToMainMenu()
             case 0:
                 //ClockMenu
                 tmElements_t myElements = {0, submenu.item[1], submenu.item[0], 1, submenu.item[2], submenu.item[3], submenu.item[4]-1970 };
-	            time_t setTime = makeTime(myElements);
+	            time_t newtime = makeTime(myElements);
                 settingClock = submenu.item[5];
                 //Serial.println("ClockSetting:");
                 //Serial.println(settingClock);
                 framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                isrTime = setTime;
-                myRTC.set(setTime);            
+                isrTime = newtime;
+                if (rtcavailable){
+                    myRTC.set(newtime);
+                }
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
-                isrTimeChange = false;
-                isrTimeUpdate = true;
+                updateClock();
                 break;
             case 1:
                 //Alarm 1 menu
@@ -1187,7 +1196,7 @@ void openSuBMenu()
             submenu.item[3] = month(isrTime);
             submenu.item[4] = year(isrTime);
             submenu.item[5] = settingClock;
-            submenu.maxVal[5]=CLOCK_ITEMS;
+            submenu.maxVal[5]=CLOCK_ITEMS-1;
 			// TODO: Max and min for clockOption missing!?!?
 			// ToDo: Kick settingClock from project
             break;
@@ -1198,7 +1207,7 @@ void openSuBMenu()
             submenu.item[0] = alm1.hh;
             submenu.item[1] = alm1.mm;
             submenu.item[2] = alm1.mode;
-			submenu.maxVal[2] = ALARM_ITEMS;
+			submenu.maxVal[2] = ALARM_ITEMS-1;
             break;
 		case 2:
             //Alarm2
@@ -1207,7 +1216,7 @@ void openSuBMenu()
             submenu.item[0] = alm2.hh;
             submenu.item[1] = alm2.mm;
             submenu.item[2] = alm2.mode;
-			submenu.maxVal[2] = ALARM_ITEMS;
+			submenu.maxVal[2] = ALARM_ITEMS-1;
             break;
         case 8:
             //Credits
@@ -1271,15 +1280,11 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-         //Serial.println("Before Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
         // Correct date if enabled for this submenu
         if (submenu.dateinfo_starts >=0){
             // Check if selected item is a date
-            if ((submenu.dateinfo_starts <= submenu.selectedItem) && (submenu.dateinfo_starts+3 > submenu.selectedItem)){
+            if ((submenu.dateinfo_starts <= submenu.selectedItem) && (submenu.dateinfo_starts+5 > submenu.selectedItem)){
                 correct_date(submenu.item + submenu.dateinfo_starts);
-        //Serial.println("After Date Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
                 return true;
             }
         }
@@ -1289,25 +1294,16 @@ bool changeSubMenuSelection()
             if ((submenu.timeinfo_starts <= submenu.selectedItem) && (submenu.timeinfo_starts+2 > submenu.selectedItem)){
                 correct_time(submenu.item + submenu.dateinfo_starts);
                 return true;
-
-        //Serial.println("After Time Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
             }
         }     
-        //Serial.println("After Time/Date Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
         // Check Max Value
         if (submenu.item[submenu.selectedItem] > submenu.maxVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.minVal[submenu.selectedItem];
         }
-        //Serial.println("After Max Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
         // Check Min Value
         if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.maxVal[submenu.selectedItem];
         }
-        //Serial.println("After Min Corrections:");
-        //Serial.println(submenu.item[submenu.selectedItem]);
         return true;
     }
     return false;
@@ -1469,8 +1465,10 @@ void updateClock()
 {
     isrTimeChange = false;
     isrTimeUpdate = true;
-    isrTime = myRTC.get();
-    myRTC.alarm(ALARM_2);
+    if (rtcavailable){
+        isrTime = myRTC.get();
+        myRTC.alarm(ALARM_2);
+    }
 }
 
 void updateCanvasText(GFXcanvas1& cCanvas, char *text, bool underline)
@@ -1728,10 +1726,12 @@ void drawNotImplementedMessage(){
 // read temperature from RTC:
 void update_temperature(){
     // Read temperature from RTC and update if necessary
-    float newtemp = myRTC.temperature()/4; 
-    if (! (newtemp==currentTemp)){
-        currentTemp = newtemp;
-        tempChanged = false;
+    if (rtcavailable){
+        float newtemp = myRTC.temperature()/4; 
+        if (! (newtemp==currentTemp)){
+            currentTemp = newtemp;
+            tempChanged = false;
+        }
     }
 }
 
