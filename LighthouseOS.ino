@@ -1124,16 +1124,26 @@ bool saveReturnToMainMenu()
         switch (selectedMMItem){
             case 0:
                 //ClockMenu
-                tmElements_t myElements = {0, submenu.item[1], submenu.item[0], 1, submenu.item[2], submenu.item[3], submenu.item[4]-1970 };
-	            time_t newtime = makeTime(myElements);
+                tmElements_t tm;
+                tm.Hour = submenu.item[0];
+                tm.Minute = submenu.item[1];
+                tm.Second = 0;
+                tm.Day = submenu.item[2];
+                tm.Month = submenu.item[3];
+                tm.Year = submenu.item[4]-1970;
+	            time_t newTime = makeTime(tm);
                 settingClock = submenu.item[5];
                 //Serial.println("ClockSetting:");
                 //Serial.println(settingClock);
                 framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                isrTime = newtime;
+                sprintf(outString, "Oldimte: %d", isrTime);
+                Serial.println(outString);
+                isrTime = newTime;
                 if (rtcavailable){
-                    myRTC.set(newtime);
+                    myRTC.set(newTime);
                 }
+                sprintf(outString, "NewTime: %d", newTime);
+                Serial.println(outString);
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
                 updateClock();
@@ -1171,6 +1181,7 @@ bool saveReturnToMainMenu()
     }
     return false;
 }
+
 void openSuBMenu()
 {
     sleepTimer = millis();
@@ -1195,8 +1206,6 @@ void openSuBMenu()
             submenu.item[4] = year(isrTime);
             submenu.item[5] = settingClock;
             submenu.maxVal[5]=CLOCK_ITEMS-1;
-			// TODO: Max and min for clockOption missing!?!?
-			// ToDo: Kick settingClock from project
             break;
 		case 1:
             //Alarm1
