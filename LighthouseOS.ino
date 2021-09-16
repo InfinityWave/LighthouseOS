@@ -10,6 +10,7 @@
 #include <Adafruit_ILI9341.h>// Controller specific library
 #include <CheapStepper.h> //https://github.com/H4K5M6/CheapStepper
 #include <Fonts/FreeSans12pt7b.h>
+#include <DFRobotDFPlayerMini.h>
 //#include <Fonts/FreeSans18pt7b.h>
 #include "Adresses.h"  // FRAM Adresses
 
@@ -24,7 +25,7 @@
 //use Hardware SPI NANO: SCK=13, MISO=12, MOSI=11 
 #define TFT_DC 9
 #define TFT_CS 8
-#define TFT_LITE -1 //PWM pin
+#define TFT_LITE 10 //PWM pin
 #define TFT_WIDTH 320
 #define TFT_HEIGHT 240
 //#define TFT_RESET 
@@ -121,7 +122,7 @@ Date "11.09.2021":
 #define ALARMTIME_ITEMS 5 // Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 #define CLOCK_ITEMS 4		
 
-#define LITE 200  // standard brightness
+#define LITE 0  // standard brightness
 
 #define DCF_INT 6     // interval of dcf sync in hours
 #define DCF_HOUR 0    // hour to start dcf sync
@@ -129,6 +130,7 @@ Date "11.09.2021":
 #define DCF_LEN 3600    // length in seconds of dcf sync attempt
 
 #define STEP_RPM 1
+#define STEP_RPM_FAST 10
 #define STEP_N 4096
 
 // initializations
@@ -175,6 +177,7 @@ DS3232RTC myRTC(false);
 DCF77 DCF = DCF77(DCF_PIN, digitalPinToInterrupt(DCF_PIN), false);
 
 Adafruit_FRAM_I2C fram = Adafruit_FRAM_I2C();
+bool framAvailable;
 
 CheapStepper stepper (STEP_IN1, STEP_IN2, STEP_IN3, STEP_IN4); 
 
@@ -195,6 +198,8 @@ uint8_t clockHour, clockMinute, clockSecond, clockDay;
 float currentTemp = 19.0;
 bool tempChanged = false;
 
+// MP3 Player
+DFRobotDFPlayerMini myDFPlayer;
 
 // button flags
 volatile bool isrButtonC = false;
@@ -209,7 +214,7 @@ const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor onl
 
     // Read settings from FRAM
 uint16_t settingClock; 
-uint16_t settingVolume;
+uint16_t settingVolume = 17;
 uint16_t settingLEDBrightness;
 uint16_t settingDisplayBrightness;
 
@@ -272,6 +277,7 @@ bool weddingModeFinished = false;
 
 void setup(void) {
     Serial.begin(9600);
+    Serial.println("Begin Startup");
     
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
@@ -294,7 +300,7 @@ void setup(void) {
     S0->addTransition(&openMainMenu,S2);    // to main menu
     S0->addTransition(&changeToWeddingMode,S3); //start wedding mode
 	S0->addTransition(&startAlarm,S99); // check and start alarm
-    S0->addTransition(&reAttachUnhandledInterrupts,S0);   //Must be last item
+    //S0->addTransition(&reAttachUnhandledInterrupts,S0);   //Must be last item
     // from standby
     S1->addTransition(&wakeup,S0);          // to clock
 	S1->addTransition(&startAlarm,S99); // check and start alarm
@@ -359,12 +365,17 @@ void setup(void) {
 	S99->addTransition(&stopAlarm,S2);
 	S99->addTransition(&reAttachUnhandledInterrupts,S99);
 	
+    Serial.println("Begin Display startup");
     // TFT setup
     delay(500);
     tft.begin();
+    Serial.println("Display startup complete");
     tft.setTextColor(COLOR_TXT);
+    Serial.println("Set Color");
     tft.setRotation(3);
+    Serial.println("Rotation");
     tft.fillScreen(COLOR_BKGND);
+    Serial.println("Screen filled");
     set_default_font();
     //canvasClock.setFont(&FreeSans18pt7b);
     //canvasClock.setTextSize(2);
@@ -407,14 +418,16 @@ void setup(void) {
     // initialize FRAM
     if (fram.begin())// you can stick the new i2c addr in here, e.g. begin(0x51);
         Serial.println("Found I2C FRAM");
+        framAvailable = true;
     else
         Serial.println("I2C FRAM not identified");
+        framAvailable = false;
 
     // Read settings from FRAM
-    settingClock = read16bit(FRAM_CLOCK_SETTINGS); 
-    settingVolume = read16bit(FRAM_VOLUME);
-    settingLEDBrightness = read16bit(FRAM_LED_BRIGHTNESS);
-    settingDisplayBrightness = read16bit(FRAM_DISPLAY_BRIGHTNESS);
+    settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
+    //settingVolume = framread16bit(FRAM_VOLUME);
+    settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
+    settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
 
 
 	// Read stored alarms from FRAM
@@ -429,7 +442,7 @@ void setup(void) {
 	recalcAlarm(alm2);
 	// Init Stepper
 	//////////////////////////////////
-    stepper.setStep(read16bit(FRAM_C_STEP));
+    stepper.setStep(framread16bit(FRAM_C_STEP));
     
     // Buttons interrupt setup
     pinMode(BTN_C, INPUT_PULLUP);
@@ -439,10 +452,18 @@ void setup(void) {
     pinMode(BTN_L, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
     update_temperature();
+    Serial.println("Startup Almost Complete");
+    Serial1.begin(9600); //Hardware Serial for MP3
+    Serial.println("Startup Nearly Complete");
+    myDFPlayer.begin(Serial1);
+    
+    Serial.println("Startup Complete");
 }
 
 void loop()
 {
+    //tft.setCursor(100,100);
+    //tft.println("Holzi und Kete");
 	// Time from RTC
     if (isrTimeChange) {
 		// Get new time from RTC, sets isrTime
@@ -462,10 +483,10 @@ void loop()
         digitalWrite(DCF_EN_PIN, LOW);
         dcfSync = true;
         dcfSyncStart = isrTime;
-        Serial.print("DCFSync start: ");
-        Serial.print(hour(isrTime));
-        Serial.print(":");
-        Serial.println(minute(isrTime));
+        //Serial.print("DCFSync start: ");
+        //Serial.print(hour(isrTime));
+        //Serial.print(":");
+        //Serial.println(minute(isrTime));
     }
     if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
         DCF.Stop();
@@ -485,10 +506,10 @@ void loop()
         dcfSyncSucc = true;
         DCFSyncStatus = true;
         DCFSyncChanged = true;
-        Serial.print("Sync Success");
-        Serial.print(hour(isrTime));
-        Serial.print(":");
-        Serial.println(minute(isrTime));
+        //Serial.print("Sync Success");
+        //Serial.print(hour(isrTime));
+        //Serial.print(":");
+        //Serial.println(minute(isrTime));
     }
 	// Run interface
 	//////////////////////////
@@ -516,6 +537,7 @@ void set_default_font(){
 void stateClockDisplay()
 {
     if (updateScreen) {
+        Serial.println("Entering ClockDisplay");
         updateScreen = false;
         updateClockSign = true;
         drawClockDisplayInfo();
@@ -529,7 +551,7 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
-	if (isrButtonR) {							// Light button was pressed
+	/*if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
@@ -539,7 +561,7 @@ void stateClockDisplay()
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
-    }
+    }*/
 	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
 		alarmLightOn = false; 						// Turn on light flag
 		analogWrite(LED_MAIN, 0);					// Switch tower light
@@ -625,7 +647,7 @@ void stateMainMenu()
     if (updateMenuSelection){
         cursorY = cursorYMenuStart;
         for (int i=0; i<MENU_ITEMS; i++){
-            Serial.println(outString);
+            //Serial.println(outString);
             canvasSmallFont.fillScreen(COLOR_BKGND);
             canvasSmallFont.setCursor(0,FONT_MARGIN + FONTSIZE_SMALL_HEIGHT);
             canvasSmallFont.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
@@ -696,22 +718,22 @@ void stateClockMenu()
          }
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==5){
-            Serial.println("Displaying Option Text");
+            //Serial.println("Displaying Option Text");
             if (submenu.selectedItem==5) { underline=true; Serial.println("Underline");}
             else {underline=false;}
-            Serial.println("Displaying Option Text now");
-            Serial.println(clockOptions[submenu.item[5]]);
-            Serial.println(submenu.item[5]);
-            Serial.println(settingClock);
+            //Serial.println("Displaying Option Text now");
+            //Serial.println(clockOptions[submenu.item[5]]);
+            //Serial.println(submenu.item[5]);
+            //Serial.println(settingClock);
             updateCanvasText(canvasSmallFont, clockOptions[submenu.item[5]], underline);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         }
         
         if (updateScreen){
-            Serial.println("Updating ClockMenuScreen");
+            //Serial.println("Updating ClockMenuScreen");
         }
         else{
-            Serial.println("Updating ClockMenu Selection");
+            //Serial.println("Updating ClockMenu Selection");
         }
         
         updateScreen = false;
@@ -1085,7 +1107,7 @@ bool returnToMainMenu()
         clearTFT();
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        Serial.println("Return to MM");
+        //Serial.println("Return to MM");
         return true;   
     }
     return false;
@@ -1104,9 +1126,9 @@ bool saveReturnToMainMenu()
                 tmElements_t myElements = {0, submenu.item[1], submenu.item[0], 1, submenu.item[2], submenu.item[3], submenu.item[4]-1970 };
 	            time_t set_time = makeTime(myElements);
                 settingClock = submenu.item[5];
-                Serial.println("ClockSetting:");
-                Serial.println(settingClock);
-                write16bit(FRAM_CLOCK_SETTINGS, settingClock);
+                //Serial.println("ClockSetting:");
+                //Serial.println(settingClock);
+                framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
                 myRTC.set(set_time);            
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
@@ -1141,7 +1163,7 @@ bool saveReturnToMainMenu()
         clearTFT();
         delay(50);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
-        Serial.println("Save and Return to MM");
+        //Serial.println("Save and Return to MM");
         return true;   
     }
     return false;
@@ -1253,15 +1275,15 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-         Serial.println("Before Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+         //Serial.println("Before Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
         // Correct date if enabled for this submenu
         if (submenu.dateinfo_starts >=0){
             // Check if selected item is a date
             if ((submenu.dateinfo_starts <= submenu.selectedItem) && (submenu.dateinfo_starts+3 > submenu.selectedItem)){
                 correct_date(submenu.item + submenu.dateinfo_starts);
-        Serial.println("After Date Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+        //Serial.println("After Date Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
                 return true;
             }
         }
@@ -1272,24 +1294,24 @@ bool changeSubMenuSelection()
                 correct_time(submenu.item + submenu.dateinfo_starts);
                 return true;
 
-        Serial.println("After Time Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+        //Serial.println("After Time Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
             }
         }     
-        Serial.println("After Time/Date Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+        //Serial.println("After Time/Date Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
         // Check Max Value
         if (submenu.item[submenu.selectedItem] > submenu.maxVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.minVal[submenu.selectedItem];
         }
-        Serial.println("After Max Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+        //Serial.println("After Max Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
         // Check Min Value
         if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
             submenu.item[submenu.selectedItem] = submenu.maxVal[submenu.selectedItem];
         }
-        Serial.println("After Min Corrections:");
-        Serial.println(submenu.item[submenu.selectedItem]);
+        //Serial.println("After Min Corrections:");
+        //Serial.println(submenu.item[submenu.selectedItem]);
         return true;
     }
     return false;
@@ -1350,32 +1372,36 @@ bool changeToWeddingMode()
 {
     if(isrButtonR){
         isrButtonR = false;    
-        delay(50);
+        delay(100);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-    
-        Serial.println("WeddingMode");
+        Serial.println("Entering WeddingMode");
+        stepper.setRpm(STEP_RPM_FAST);
         moveTower = true;
         stepperActive = true;
-        stepper.newMoveDegreesCCW(360);
+        stepper.newMove(false, 36000);
+        Serial.println("Start Player");
         analogWrite(LED_MAIN, 255);
+        analogWrite(LED_BTN_C, 255);
+        myDFPlayer.volume(settingVolume);
+        myDFPlayer.loop(1);
+        return true;
     }
-    return true;
 }
 
 bool exitWeddingMode()
 {
-    if(isrButtonR){
-        isrButtonR = false;    
-        delay(50);
-        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-    
-        Serial.println("WeddingMode");
+    bool button_pressed = anyButtonPressed();
+    if(button_pressed){
+        Serial.println("Exit WeddingMode");
+        stepper.setRpm(STEP_RPM);
+        analogWrite(LED_BTN_C, 0);
+        myDFPlayer.stop();
         moveTower = false;
         stepperActive = false;
         //stepper.newMoveDegreesCCW(360);
         analogWrite(LED_MAIN, 0);
     }
-   return true;
+   return button_pressed;
 }
 
 bool anyButtonPressed()
@@ -1402,8 +1428,8 @@ bool anyButtonPressed()
     if (buttonPressed){
         sleepTimer = millis();
         clearTFT();
-        return true;
     }
+    return buttonPressed;
 }
 
 bool reAttachUnhandledInterrupts()
@@ -1458,6 +1484,7 @@ void updateCanvasText(GFXcanvas1& cCanvas, char *text, bool underline)
     cCanvas.println(text);
     if (underline)
     {
+        //Serial.println("Underlining Text");
         cCanvas.getTextBounds(text, 0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
         cCanvas.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
     }
@@ -1524,18 +1551,18 @@ void drawClock(GFXcanvas1& cCanvas, uint8_t cHour, uint8_t cMinute, int16_t xPos
     cCanvas.println(dateString);
     cCanvas.getTextBounds(dateString, 0, cursorPos, &x1, &y1, &w1, &h1);   
     sprintf(outString, "Underline Setting %d", underline);
-    Serial.println(outString);
+    //Serial.println(outString);
     if (underline == 0){}   
     if (underline & 1){
         // Underline hour
-        Serial.println("Underline Hour");
+        //Serial.println("Underline Hour");
         sprintf(dateString,"%02d", cHour);
         cCanvas.getTextBounds(dateString, 0, cursorPos, &x2, &y2, &w2, &h2);
         cCanvas.fillRect(x1, y1+h2+1, w2, MENULINEWIDTH, COLOR_TXT); 
     } 
     if (underline & 2){
         //underline day
-        Serial.println("Underline Minute");
+        //Serial.println("Underline Minute");
         sprintf(dateString,"%02d", cMinute);
         cCanvas.getTextBounds(dateString, 0, cursorPos, &x2, &y2, &w2, &h2);
         cCanvas.fillRect(x1+w1-w2, y1+h2+1, w2, MENULINEWIDTH, COLOR_TXT);
@@ -1674,7 +1701,7 @@ void clockDisplay(time_t t)
     }
     if (clockMinute != minute(t)){
         sprintf(outString, ("Moving stepper due to Minute: %02d, %02d", clockMinute, minute(t)));
-        Serial.println(outString);
+        //Serial.println(outString);
         clockMinute = minute(t);
         updateCanvasClock(canvasClock, clockMinute, false);
         drawClockItems(canvasClock, CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT, CLOCKDISPLAY_CLOCK_Y+TFT_MARGIN_TOP, 2);
@@ -1900,49 +1927,71 @@ void recalcAlarm(struct alarms &alm){
 
 void writeAlarms (uint16_t address, struct alarms alm)
 {
-    fram.write(address, alm.hh);
-    fram.write(address+1, alm.mm);
-    fram.write(address+2, alm.dd);
-    fram.write(address+3, alm.act);
-    fram.write(address+4, alm.light);
-    fram.write(address+5, alm.soundfile);
-	fram.write(address+6, alm.mode);
+    framwrite8bit(address, alm.hh);
+    framwrite8bit(address+1, alm.mm);
+    framwrite8bit(address+2, alm.dd);
+    framwrite8bit(address+3, alm.act);
+    framwrite8bit(address+4, alm.light);
+    framwrite8bit(address+5, alm.soundfile);
+	framwrite8bit(address+6, alm.mode);
 }
 
 
 void readAlarms (uint16_t address, struct alarms &alm)
 {
 	// Note: nextAlarm is not sored. Must be calculated after reading the alarm
-    alm.hh = fram.read(address);
-    alm.mm = fram.read(address+1);
-    alm.dd = fram.read(address+2);
-    alm.act = fram.read(address+3);
-    alm.light = fram.read(address+4);
-    alm.soundfile = fram.read(address+5);
-	alm.mode 	= fram.read(address+6);
+    alm.hh = framread8bit(address);
+    alm.mm = framread8bit(address+1);
+    alm.dd = framread8bit(address+2);
+    alm.act = framread8bit(address+3);
+    alm.light = framread8bit(address+4);
+    alm.soundfile = framread8bit(address+5);
+	alm.mode 	= framread8bit(address+6);
 }
 
-void write16bit (uint16_t address, uint16_t data)
+
+void framwrite8bit (uint16_t address, uint8_t data)
 {
-    fram.write(address, (uint8_t*)&data, 2);
+    if (framAvailable){ 
+        fram.write(address, data);
+    }
 }
 
-uint16_t read16bit (uint16_t address)
+uint8_t framread8bit (uint16_t address){
+    uint8_t data = 0;
+    if (framAvailable){
+        fram.read(address);
+    }
+    return data;
+}
+
+void framwrite16bit (uint16_t address, uint16_t data)
 {
-    uint16_t data;
-    fram.read(address, (uint8_t*)&data, 2);
+    if (framAvailable){ 
+        fram.write(address, (uint8_t*)&data, 2);
+    }
+}
+
+uint16_t framread16bit (uint16_t address)
+{
+    uint16_t data = 0;
+    if (framAvailable){
+        fram.read(address, (uint8_t*)&data, 2);
+    }
     return data;
 }
 
 
-void write32bit (uint16_t address, uint32_t data)
+void framwrite32bit (uint16_t address, uint32_t data)
 {
     fram.write(address, (uint8_t*)&data, 4);
 }
 
-uint32_t read32bit (uint16_t address)
+uint32_t framread32bit (uint16_t address)
 {
-    uint32_t data;
-    fram.read(address, (uint8_t*)&data, 4);
+    uint32_t data = 0;
+    if (framAvailable){
+        fram.read(address, (uint8_t*)&data, 4);
+    }
     return data;
 }
