@@ -667,7 +667,7 @@ void stateMainMenu()
 void drawMenuTop(char *menuName)
 {
     // Draw Top Icons
-    drawMenuSetter(4);
+    drawMenuSetter(2+4);
     cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
     tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
     cursorY = cursorY + MENULINEWIDTH+FONT_MARGIN+FONTSIZE_SMALL_HEIGHT+2;
@@ -1313,31 +1313,33 @@ void correct_date(int16_t *date)
 {
     // Check the date and correct based on calendar
     // date must be an array with 1st entry hour, than minute, day, month, year
-    
+
     // Check if leap year
     int leapyear = 0;
     if (!(date[4] % 4)){
         leapyear = 1;
     }
+    if (date[4] < 1970){date[4]=1970;}
     // Check month overflow
-    if (date[3] < 1){date[3] = 12;}
-    else{date[3] = date[3] % (12+1);}
+    if (date[3] < 1 ){date[3] = 12;}
+    if (date[3] > 12){date[3] = 1;}
     // check correct number of days for month
     // Begin with month with 31 days
+    uint8_t daysPerMonth;
     if (date[3]==1 || date[3]==3 || date[3]==5 || date[3]==7 || date[3]==8 || date[3]==10 || date[3]==12){
-        if (date[2] < 1){date[2] = 31;}
-        else {date[2] = date[2] % (31+1);} 
+        daysPerMonth = 31;
     }
     // Month with 30 days
     if (date[3]==4 || date[3]==6 || date[3]==9 || date[3]==11){
-        if (date[2] < 1){date[2] = 30;}
-        else{date[2] = date[2] % (30+1);}
+        daysPerMonth = 30;
     }
     // February
     if (date[3]==2){
-        if(date[2] < 1){date[2] = 28 + leapyear;}
-        else{date[2] = date[2] % (28 + leapyear +1);}
+        daysPerMonth = 28 + leapyear;
     }
+        if(date[2] < 1){date[2] = daysPerMonth;}
+        if (date[2] > daysPerMonth){date[2] = 1;}
+
     // Correct hour over and underflow
     correct_time(date);
 }
@@ -1346,7 +1348,12 @@ void correct_time(int16_t *dtime)
 {
     // Check the time for over and underflows
     // date must be an array with 1st entry hour, than minute
-    
+    if (dtime[0] < 0){dtime[0] = hours_per_day-1;}
+    if (dtime[0] > hours_per_day-1){dtime[0] = 0;}
+    if (dtime[1] < 0){dtime[1] = 59;}
+    if (dtime[1] > 59){dtime[1] = 0;}
+
+/*
     while (dtime[0] < 0){
         dtime[0] = dtime[0] + hours_per_day; 
     }
@@ -1355,7 +1362,7 @@ void correct_time(int16_t *dtime)
     while (dtime[1] < 0){
         dtime[1] = dtime[1] + 60; 
     }
-    dtime[1] = dtime[1] % (60);
+    dtime[1] = dtime[1] % (60);*/
 }
 
 bool changeToWeddingMode()
@@ -1645,8 +1652,7 @@ void drawMenuSetter(uint8_t isOn)
             tft.fillCircle(CANVAS_MENUL_X+TFT_MARGIN_LEFT+CANVAS_MENULR_ICONOFFSET, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, tcolor);
             tft.fillCircle(CANVAS_MENUR_X+TFT_MARGIN_LEFT+CANVAS_MENULR_ICONOFFSET, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, tcolor);
         }
-    }
-    
+    }   
 }
 
 void drawClockItems(GFXcanvas1& cCanvas, int16_t xPos, int16_t yPos, uint8_t clock_item)
