@@ -416,12 +416,14 @@ void setup(void) {
     prepareClock();
 
     // initialize FRAM
-    if (fram.begin())// you can stick the new i2c addr in here, e.g. begin(0x51);
+    if (fram.begin()){// you can stick the new i2c addr in here, e.g. begin(0x51);
         Serial.println("Found I2C FRAM");
         framAvailable = true;
-    else
+    }
+    else{
         Serial.println("I2C FRAM not identified");
         framAvailable = false;
+    }
 
     // Read settings from FRAM
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
