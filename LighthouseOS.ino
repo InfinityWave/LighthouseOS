@@ -214,12 +214,14 @@ const char *soundOptions[SOUND_ITEMS] = {"Bell", "Horn", "Wedding", "Off"};
 const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Single" ,"Always", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 const char *alarmOptions[ALARM_ITEMS] = {"Light+Sound", "Sound only", "Light only", "Off"};
 const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor only", "Off"};
+const char *dcfOptions[2] = {"DCF77 Off", "DCF77 On"};
 
     // Read settings from FRAM
 uint16_t settingClock; 
 uint16_t settingVolume = 17;
 uint16_t settingLEDBrightness;
 uint16_t settingDisplayBrightness;
+bool settingDCFEnabled = true;
 
 //menu variables
 int8_t selectedMMItem = 0;
@@ -433,10 +435,10 @@ void setup(void) {
 
     // Read settings from FRAM
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
-    //settingVolume = framread16bit(FRAM_VOLUME);
+    settingVolume = framread16bit(FRAM_VOLUME);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
     settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
-
+    settingDCFEnabled = framread16bit(FRAM_DCF_ENABLE);
 
 	// Read stored alarms from FRAM
 	///////////////////////////////////
@@ -481,41 +483,44 @@ void loop()
         isrTimeChange = true;
         update_temperature();
     }
-	// Time from DCF
-    if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
-        DCF.Start();
-        digitalWrite(DCF_EN_PIN, LOW);
-        dcfSync = true;
-        dcfSyncStart = isrTime;
-        //Serial.print("DCFSync start: ");
-        //Serial.print(hour(isrTime));
-        //Serial.print(":");
-        //Serial.println(minute(isrTime));
-    }
-    if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
-        DCF.Stop();
-        digitalWrite(DCF_EN_PIN, HIGH);
-        dcfSync = false;
-        dcfSyncSucc = false;
-        DCFSyncStatus = false;
-        DCFSyncChanged = true;
-        //Serial.println("Sync Failed");
-    }
-    if (dcfSync && DCF.getTime() != 0) {
-        DCF.Stop();
-        if (rtcavailable){
-            myRTC.set(DCF.getTime());
+	if (settingDCFEnabled)
+    {
+        // Time from DCF
+        if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
+            DCF.Start();
+            digitalWrite(DCF_EN_PIN, LOW);
+            dcfSync = true;
+            dcfSyncStart = isrTime;
+            //Serial.print("DCFSync start: ");
+            //Serial.print(hour(isrTime));
+            //Serial.print(":");
+            //Serial.println(minute(isrTime));
         }
-        updateClock();
-        digitalWrite(DCF_EN_PIN, HIGH);
-        dcfSync = false;
-        dcfSyncSucc = true;
-        DCFSyncStatus = true;
-        DCFSyncChanged = true;
-        //Serial.print("Sync Success");
-        //Serial.print(hour(isrTime));
-        //Serial.print(":");
-        //Serial.println(minute(isrTime));
+        if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
+            DCF.Stop();
+            digitalWrite(DCF_EN_PIN, HIGH);
+            dcfSync = false;
+            dcfSyncSucc = false;
+            DCFSyncStatus = false;
+            DCFSyncChanged = true;
+            //Serial.println("Sync Failed");
+        }
+        if (dcfSync && DCF.getTime() != 0) {
+            DCF.Stop();
+            if (rtcavailable){
+                myRTC.set(DCF.getTime());
+            }
+            updateClock();
+            digitalWrite(DCF_EN_PIN, HIGH);
+            dcfSync = false;
+            dcfSyncSucc = true;
+            DCFSyncStatus = true;
+            DCFSyncChanged = true;
+            //Serial.print("Sync Success");
+            //Serial.print(hour(isrTime));
+            //Serial.print(":");
+            //Serial.println(minute(isrTime));
+        }
     }
 	// Run interface
 	//////////////////////////
@@ -731,6 +736,12 @@ void stateClockMenu()
             if (submenu.selectedItem==5) {underline=true;}
             else {underline=false;}
             updateCanvasText(canvasSmallFont, clockOptions[submenu.item[5]], underline);
+            tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+        }
+        // Draw DCF77 Mode Selector
+        cursorY = cursorY + canvasSmallFont.height();
+        if (updateScreen || submenu.selectedItem==6){
+            updateCanvasText(canvasSmallFont, dcfOptions[submenu.item[6]], submenu.selectedItem==6);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         }
         updateScreen = false;
@@ -1125,6 +1136,8 @@ bool saveReturnToMainMenu()
 	            tmpTime = makeTime(tmp_tm);
                 settingClock = submenu.item[5];               
                 framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
+                settingDCFEnabled = (bool)submenu.item[6];               
+                framwrite16bit(FRAM_DCF_ENABLE, settingDCFEnabled);
                 isrTime = tmpTime;
                 if (rtcavailable){
                     myRTC.set(tmpTime);
@@ -1178,7 +1191,6 @@ void openSuBMenu()
     sleepTimer = millis();
     isrButtonC = false;
     // Init
-    
     submenu.dateinfo_starts = -1;  // define whether there is a day to check and its pos in submenu
     submenu.timeinfo_starts = -1;  // define whether thers is time to check an position in submenu
     for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
@@ -1188,7 +1200,7 @@ void openSuBMenu()
     switch (selectedMMItem){
         case 0:
             //ClockMenu
-            submenu.num_items = 6;
+            submenu.num_items = 7;
             submenu.dateinfo_starts = 0;
             submenu.item[0] = hour(isrTime);
             submenu.item[1] = minute(isrTime);
@@ -1197,6 +1209,8 @@ void openSuBMenu()
             submenu.item[4] = year(isrTime);
             submenu.item[5] = settingClock;
             submenu.maxVal[5]=CLOCK_ITEMS-1;
+            submenu.item[6] = (int16_t)settingDCFEnabled;
+            submenu.maxVal[6]=1;
             break;
 		case 1:
             //Alarm1
@@ -1232,7 +1246,7 @@ void openSuBMenu()
         checkSubMenuItemValidity(i);
     }
     // Begin with selection of last item, which should be save and exit
-    submenu.selectedItem = submenu.num_items;//+1;
+    submenu.selectedItem = submenu.num_items+1;
     clearTFT();
     drawMenuTop(mainMenuEntries[selectedMMItem]);
     updateSubMenuCenterIcon();
