@@ -117,7 +117,7 @@ Date "11.09.2021":
 #define MAINMENU_TXT_X 120
 //SpecialSubMenuSettings
 #define SUBMENU_MAX_ITEMS 8
-#define SOUND_ITEMS 3
+#define SOUND_ITEMS 4
 #define ALARM_ITEMS 4
 #define ALARMTIME_ITEMS 5 // Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 #define CLOCK_ITEMS 4		
@@ -210,8 +210,9 @@ volatile bool isrButtonR = false;
 
 // menu entries
 const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
-const char *soundOptions[SOUND_ITEMS] = {"Horn", "Wedding", "Off"};
+const char *soundOptions[SOUND_ITEMS] = {"Bell", "Horn", "Wedding", "Off"};
 const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Single" ,"Always", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
+const char *alarmOptions[ALARM_ITEMS] = {"Light+Sound", "Sound only", "Light only", "Off"};
 const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor only", "Off"};
 
     // Read settings from FRAM
@@ -236,6 +237,8 @@ uint32_t alarmLightDelay = 1000;	// Time for tower light on (ms)
 uint32_t alarmLightTimer = 0;		// Tower light times
 bool alarmLightOn = false;			// If tower light is on
 time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
+time_t tmpTime = 0;
+tmElements_t tmp_tm;
 uint32_t alarmTotalTimer = 0;		// Timer to stop alarm after some time (if noone is at home to press the button)
 uint32_t alarmTotalDelay = 120000;	// 2 min
 
@@ -252,10 +255,8 @@ uint8_t brightness = LITE;
 struct alarms {
     uint8_t hh;
     uint8_t mm;
-    uint8_t dd;			// Not used outside of read and write FRAM
-    bool act;			// Not used outside of read and write FRAM
-    bool light;			// Not used outside of read and write FRAM
-    uint8_t soundfile;	// Not used outside of read and write FRAM
+    uint8_t towermode;	// What tower should do (all, turn+light, sound, off)
+    uint8_t soundfile;	// Sound file to play
     time_t nextAlarm; // Time stamp of next alarm. Will not be stored on FRAM
 	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
@@ -332,26 +333,31 @@ void setup(void) {
     S5->addTransition(&returnToClockDisplay,S0); //After timeout
     S5->addTransition(&returnToMainMenu,S2);
     S5->addTransition(&saveReturnToMainMenu,S2);
+    S5->addTransition(&changeSubMenuSelection,S5);
 	S5->addTransition(&startAlarm,S99); // check and start alarm    
     //Alarm2 Menu
     S6->addTransition(&returnToClockDisplay,S0); //After timeout
     S6->addTransition(&returnToMainMenu,S2);
     S6->addTransition(&saveReturnToMainMenu,S2);
+    S6->addTransition(&changeSubMenuSelection,S6);
 	S6->addTransition(&startAlarm,S99); // check and start alarm
     //Sound Menu
     S7->addTransition(&returnToClockDisplay,S0); //After timeout
     S7->addTransition(&returnToMainMenu,S2);
     S7->addTransition(&saveReturnToMainMenu,S2);
+    S7->addTransition(&changeSubMenuSelection,S7);
 	S7->addTransition(&startAlarm,S99); // check and start alarm
-    //Volumne Menu
+    //Volume Menu
     S8->addTransition(&returnToClockDisplay,S0); //After timeout
     S8->addTransition(&returnToMainMenu,S2);
     S8->addTransition(&saveReturnToMainMenu,S2);
+    S8->addTransition(&changeSubMenuSelection,S8);
 	S8->addTransition(&startAlarm,S99); // check and start alarm
     //Brightness Menu
     S9->addTransition(&returnToClockDisplay,S0); //After timeout
     S9->addTransition(&returnToMainMenu,S2);
     S9->addTransition(&saveReturnToMainMenu,S2);
+    S9->addTransition(&changeSubMenuSelection,S9);
 	S9->addTransition(&startAlarm,S99); // check and start alarm
     //Homing Menu
     S10->addTransition(&returnToClockDisplay,S0); //After timeout
@@ -722,24 +728,11 @@ void stateClockMenu()
         // Draw Clock Mode Setter
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==5){
-            //Serial.println("Displaying Option Text");
             if (submenu.selectedItem==5) {underline=true;}
             else {underline=false;}
-            //Serial.println("Displaying Option Text now");
-            //Serial.println(clockOptions[submenu.item[5]]);
-            //Serial.println(submenu.item[5]);
-            //Serial.println(settingClock);
             updateCanvasText(canvasSmallFont, clockOptions[submenu.item[5]], underline);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
         }
-        
-        if (updateScreen){
-            //Serial.println("Updating ClockMenuScreen");
-        }
-        else{
-            //Serial.println("Updating ClockMenu Selection");
-        }
-        
         updateScreen = false;
         updateMenuSelection = false;
     }
@@ -747,48 +740,47 @@ void stateClockMenu()
 
 // Draw menu to set alarms 
 void drawAlarmMenu(){
-if (updateScreen) {
+    if (updateScreen) {
         updateMenuSelection = true;
     }
-    if (updateMenuSelection){
-        updateMenuSelection = false;
+    if (updateMenuSelection){      
         cursorY = cursorYMenuStart;
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         uint8_t underline = 0;
-		// Draw time and mark selected item
+        // Draw Clock Setter
         if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
             if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
             drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
         }
-        cursorY = cursorY + canvasSmallFont.height();
-        // Draw mode
-		updateCanvasText(canvasSmallFont, alarmTimeOptions[submenu.item[2]], submenu.selectedItem==2);
-		tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+        
+        const char **menuOptions=NULL;
+        for (int i=2; i<5; i++)
+        {   
+            cursorY = cursorY + canvasSmallFont.height();
+            switch (i){
+                case 2: menuOptions = alarmTimeOptions; break;
+                case 3: menuOptions = alarmOptions; break;
+                case 4: menuOptions = soundOptions; break;
+            }
+            if (updateScreen || submenu.selectedItem==i){
+                updateCanvasText(canvasSmallFont, menuOptions[submenu.item[i]], submenu.selectedItem==i);
+                tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+            }
+        }
         updateScreen = false;
+        updateMenuSelection = false;
     }
 }
 
 //S5
 void stateAlarm1Menu()
 {
-    if (updateScreen) {
-        updateScreen = false;        
-        drawMenuTop("Alarm 1 Menu");
-        updateMenuSelection = true;
-        tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
-    }
     drawAlarmMenu();
 }
 
 //S6
 void stateAlarm2Menu()
 {
-    if (updateScreen) {
-        updateScreen = false;        
-        drawMenuTop("Alarm 2 Menu");
-        updateMenuSelection = true;
-        tft.fillCircle(MENU_SEL_X,TFT_MARGIN_TOP+MENU_SEL_Y,MENU_SEL_SIZE,COLOR_TXT);
-    }
     drawAlarmMenu();
 }
 
@@ -1124,26 +1116,19 @@ bool saveReturnToMainMenu()
         switch (selectedMMItem){
             case 0:
                 //ClockMenu
-                tmElements_t tm;
-                tm.Hour = submenu.item[0];
-                tm.Minute = submenu.item[1];
-                tm.Second = 0;
-                tm.Day = submenu.item[2];
-                tm.Month = submenu.item[3];
-                tm.Year = submenu.item[4]-1970;
-	            time_t newTime = makeTime(tm);
-                settingClock = submenu.item[5];
-                //Serial.println("ClockSetting:");
-                //Serial.println(settingClock);
+                tmp_tm.Hour = submenu.item[0];
+                tmp_tm.Minute = submenu.item[1];
+                tmp_tm.Second = 0;
+                tmp_tm.Day = submenu.item[2];
+                tmp_tm.Month = submenu.item[3];
+                tmp_tm.Year = submenu.item[4]-1970;
+	            tmpTime = makeTime(tmp_tm);
+                settingClock = submenu.item[5];               
                 framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                sprintf(outString, "Oldimte: %d", isrTime);
-                Serial.println(outString);
-                isrTime = newTime;
+                isrTime = tmpTime;
                 if (rtcavailable){
-                    myRTC.set(newTime);
+                    myRTC.set(tmpTime);
                 }
-                sprintf(outString, "NewTime: %d", newTime);
-                Serial.println(outString);
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
                 updateClock();
@@ -1153,7 +1138,9 @@ bool saveReturnToMainMenu()
 				alm1.hh = submenu.item[0];
 				alm1.mm = submenu.item[1];
 				alm1.mode = submenu.item[2];
-                // Write alarms to FRAM
+                alm1.towermode = submenu.item[3];
+                alm1.soundfile = submenu.item[4];
+                // Write alarm to FRAM
                 writeAlarms(FRAM_ALARM1, alm1);
                 // Update Alarms for next call
                 recalcAlarm(alm1);
@@ -1163,6 +1150,8 @@ bool saveReturnToMainMenu()
 				alm2.hh = submenu.item[0];
 				alm2.mm = submenu.item[1];
 				alm2.mode = submenu.item[2];
+                alm2.towermode = submenu.item[3];
+                alm2.soundfile = submenu.item[4];
                 // Write alarms to FRAM
                 writeAlarms(FRAM_ALARM2, alm2);
                 // Update Alarms for next call
@@ -1173,6 +1162,8 @@ bool saveReturnToMainMenu()
                 //Credits
                 submenu.num_items = 0;
                 break;
+
+
         }
         clearTFT();
         reAttachUnhandledInterrupts();
@@ -1209,28 +1200,39 @@ void openSuBMenu()
             break;
 		case 1:
             //Alarm1
-            submenu.num_items = 3; // 3 Items
+            submenu.num_items = 5; 
             submenu.timeinfo_starts = 0; // Only time, no date
             submenu.item[0] = alm1.hh;
             submenu.item[1] = alm1.mm;
             submenu.item[2] = alm1.mode;
-			submenu.maxVal[2] = ALARM_ITEMS-1;
+            submenu.maxVal[2] = ALARMTIME_ITEMS-1;
+            submenu.item[3] = alm1.towermode;
+			submenu.maxVal[3] = ALARM_ITEMS-1;
+            submenu.item[4] = alm1.soundfile;
+			submenu.maxVal[4] = SOUND_ITEMS-1;
             break;
 		case 2:
             //Alarm2
-            submenu.num_items = 3; // 3 Items
+            submenu.num_items = 5; 
             submenu.timeinfo_starts = 0; // Only time, no date
             submenu.item[0] = alm2.hh;
             submenu.item[1] = alm2.mm;
             submenu.item[2] = alm2.mode;
-			submenu.maxVal[2] = ALARM_ITEMS-1;
+            submenu.maxVal[2] = ALARMTIME_ITEMS-1;
+            submenu.item[3] = alm2.towermode;
+			submenu.maxVal[3] = ALARM_ITEMS-1;
+            submenu.item[4] = alm2.soundfile;
+			submenu.maxVal[4] = SOUND_ITEMS-1;
             break;
         case 8:
             //Credits
             submenu.num_items = 0;
     }
+    for (int i=0; i <submenu.num_items; i++){
+        checkSubMenuItemValidity(i);
+    }
     // Begin with selection of last item, which should be save and exit
-    submenu.selectedItem = submenu.num_items+1;
+    submenu.selectedItem = submenu.num_items;//+1;
     clearTFT();
     drawMenuTop(mainMenuEntries[selectedMMItem]);
     updateSubMenuCenterIcon();
@@ -1251,28 +1253,7 @@ bool changeSubMenuSelection()
         return true;
     }
     if (isrButtonL || isrButtonR) {
-        // Check if is one of last two items, then only decrement/increment selection
         sleepTimer = millis();
-        /*if (submenu.selectedItem >= submenu.num_items){
-            if (isrButtonL){
-                isrButtonL = false;
-                submenu.selectedItem = (submenu.selectedItem + 1) % (submenu.num_items+2);  
-                delay(50);
-                attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-            }
-            else {
-                isrButtonR = false;
-                submenu.selectedItem = (submenu.selectedItem - 1 + submenu.num_items+2) % (submenu.num_items+2);  
-                delay(50);
-                attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-            }
-            updateScreen = true;
-            updateSubMenuCenterIcon();
-            return true;
-        }*/
-        /*for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
-            submenu.prev_item[i] = submenu.item[i];
-        }*/
         // Handle normal increment of currently selected value
         updateMenuSelection = true;
         if (isrButtonL){
@@ -1287,33 +1268,40 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-        // Correct date if enabled for this submenu
-        if (submenu.dateinfo_starts >=0){
-            // Check if selected item is a date
-            if ((submenu.dateinfo_starts <= submenu.selectedItem) && (submenu.dateinfo_starts+5 > submenu.selectedItem)){
-                correct_date(submenu.item + submenu.dateinfo_starts);
-                return true;
-            }
-        }
-        // Correct time if enabled for this submenu
-        if (submenu.timeinfo_starts >=0){
-            // Check if selected item is a time
-            if ((submenu.timeinfo_starts <= submenu.selectedItem) && (submenu.timeinfo_starts+2 > submenu.selectedItem)){
-                correct_time(submenu.item + submenu.dateinfo_starts);
-                return true;
-            }
-        }     
-        // Check Max Value
-        if (submenu.item[submenu.selectedItem] > submenu.maxVal[submenu.selectedItem]){
-            submenu.item[submenu.selectedItem] = submenu.minVal[submenu.selectedItem];
-        }
-        // Check Min Value
-        if (submenu.item[submenu.selectedItem] < submenu.minVal[submenu.selectedItem]){
-            submenu.item[submenu.selectedItem] = submenu.maxVal[submenu.selectedItem];
-        }
+        checkSubMenuItemValidity(submenu.selectedItem);
         return true;
     }
     return false;
+}
+
+void checkSubMenuItemValidity(uint8_t selectedItem)
+{
+    // Correct date if enabled for this submenu
+    if (submenu.dateinfo_starts >=0){
+        // Check if selected item is a date
+        if ((submenu.dateinfo_starts <= selectedItem) && (submenu.dateinfo_starts+5 > selectedItem)){
+            correct_date(submenu.item + submenu.dateinfo_starts);
+            return;
+        }
+    }
+    // Correct time if enabled for this submenu
+    if (submenu.timeinfo_starts >=0){
+        // Check if selected item is a time
+        if ((submenu.timeinfo_starts <= selectedItem) && (submenu.timeinfo_starts+2 > selectedItem)){
+            correct_time(submenu.item + submenu.timeinfo_starts);
+            return;
+        }
+    }     
+    // Check Max Value
+    if (submenu.item[selectedItem] > submenu.maxVal[selectedItem]){
+        submenu.item[selectedItem] = submenu.minVal[selectedItem];
+    }
+    // Check Min Value
+    if (submenu.item[selectedItem] < submenu.minVal[selectedItem]){
+        submenu.item[selectedItem] = submenu.maxVal[selectedItem];
+    }
+    return;
+
 }
 
 // Helper functions and wedding mode
@@ -1361,17 +1349,6 @@ void correct_time(int16_t *dtime)
     if (dtime[0] > hours_per_day-1){dtime[0] = 0;}
     if (dtime[1] < 0){dtime[1] = 59;}
     if (dtime[1] > 59){dtime[1] = 0;}
-
-/*
-    while (dtime[0] < 0){
-        dtime[0] = dtime[0] + hours_per_day; 
-    }
-    dtime[0] = dtime[0] % (hours_per_day);
-    // Correct minute over and underflow
-    while (dtime[1] < 0){
-        dtime[1] = dtime[1] + 60; 
-    }
-    dtime[1] = dtime[1] % (60);*/
 }
 
 bool changeToWeddingMode()
@@ -1549,7 +1526,6 @@ void updateCanvasDate(GFXcanvas1& cCanvas, uint8_t cDay, uint8_t cMonth, uint16_
     }
 }
 
-
 void drawClock(GFXcanvas1& cCanvas, uint8_t cHour, uint8_t cMinute, int16_t xPos, int16_t yPos, uint8_t underline)
 {     
     uint8_t cursorPos = cCanvas.height()-FONT_MARGIN-MENULINEWIDTH;
@@ -1581,33 +1557,7 @@ void drawClock(GFXcanvas1& cCanvas, uint8_t cHour, uint8_t cMinute, int16_t xPos
     }
     tft.drawBitmap(xPos, yPos, cCanvas.getBuffer(), cCanvas.width(), cCanvas.height(), COLOR_TXT, COLOR_BKGND); 
 }
-/*
-    sprintf(timeString,"%02d",cDigit);
-    cCanvas.fillScreen(COLOR_BKGND);
-    cCanvas.setCursor(0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH);
-    cCanvas.println(timeString);
-    if (underline)
-    {
-        cCanvas.getTextBounds(timeString, 0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
-        cCanvas.fillRect(x1, y1+h1+1, w1, MENULINEWIDTH, COLOR_TXT);
-    }
 
-
-    //Draw Hour
-    updateCanvasClock(cCanvas, cHour, (bool)(underline & 1));
-    drawClockItems(cCanvas, xPos, yPos, 0);
-    //Manually Draw :
-    tft.setCursor(xPos+cCanvas.getCursorX(), yPos+cCanvas.getCursorY());
-    //cCanvas.fillScreen(COLOR_BKGND);
-    //cCanvas.setCursor(0, cCanvas.height()-FONT_MARGIN-MENULINEWIDTH);
-    //cCanvas.println(":");
-    tft.println(":");
-    //drawClockItems(cCanvas, xPos, yPos, 1);
-    //Draw Minute
-    //updateCanvasClock(cCanvas, cMinute, (bool)(underline & 2));
-    //drawClockItems(cCanvas, xPos, yPos, 2);
-}
-*/
 void drawMenuSetter(uint8_t isOn)
 {
     if (isOn != currentMenuSetter){
@@ -1931,11 +1881,9 @@ void writeAlarms (uint16_t address, struct alarms alm)
 {
     framwrite8bit(address, alm.hh);
     framwrite8bit(address+1, alm.mm);
-    framwrite8bit(address+2, alm.dd);
-    framwrite8bit(address+3, alm.act);
-    framwrite8bit(address+4, alm.light);
-    framwrite8bit(address+5, alm.soundfile);
-	framwrite8bit(address+6, alm.mode);
+    framwrite8bit(address+2, alm.towermode);
+    framwrite8bit(address+3, alm.soundfile);
+	framwrite8bit(address+4, alm.mode);
 }
 
 
@@ -1944,11 +1892,9 @@ void readAlarms (uint16_t address, struct alarms &alm)
 	// Note: nextAlarm is not sored. Must be calculated after reading the alarm
     alm.hh = framread8bit(address);
     alm.mm = framread8bit(address+1);
-    alm.dd = framread8bit(address+2);
-    alm.act = framread8bit(address+3);
-    alm.light = framread8bit(address+4);
-    alm.soundfile = framread8bit(address+5);
-	alm.mode 	= framread8bit(address+6);
+    alm.towermode = framread8bit(address+2);
+    alm.soundfile = framread8bit(address+3);
+	alm.mode 	= framread8bit(address+4);
 }
 
 
