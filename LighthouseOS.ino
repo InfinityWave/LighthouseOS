@@ -122,7 +122,8 @@ Date "11.09.2021":
 #define ALARMTIME_ITEMS 5 // Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 #define CLOCK_ITEMS 4		
 
-#define LITE 0  // standard brightness
+#define LITE 200  // standard brightness
+#define LITE_MIN 10 //max display brightness
 #define LITE_MAX 200 //max display brightness
 #define VOLUME_MAX 30 //max volume setting
 
@@ -284,14 +285,6 @@ bool weddingModeFinished = false;
 void setup(void) {
     Serial.begin(9600);
    
-    // setup TFT Backlight as off
-    pinMode(TFT_LITE, OUTPUT);
-    analogWrite(TFT_LITE, settingDisplayBrightness);
-
-    // setup tower LED
-    pinMode(LED_MAIN, OUTPUT);
-    analogWrite(LED_MAIN, 0);		
-
     //stepper setup
     stepper.setRpm(STEP_RPM);
 
@@ -437,8 +430,21 @@ void setup(void) {
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
     settingVolume = framread16bit(FRAM_VOLUME);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
-    settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS); //ToDo ReEnable with FRAM
+    settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
+    // Override 0 Display brightness
+    if (! settingDisplayBrightness){
+        settingDisplayBrightness = LITE_MIN;
+    }
     settingDCFEnabled = framread16bit(FRAM_DCF_ENABLE);
+
+    // setup TFT Backlight as off
+    pinMode(TFT_LITE, OUTPUT);
+    analogWrite(TFT_LITE, settingDisplayBrightness);
+
+    // setup tower LED
+    pinMode(LED_MAIN, OUTPUT);
+    analogWrite(LED_MAIN, 0);		
+
 
 	// Read stored alarms from FRAM
 	///////////////////////////////////
@@ -1287,7 +1293,8 @@ void openSuBMenu()
             //Brigthness
             submenu.num_items = 2; 
             submenu.item[0] = settingDisplayBrightness;
-			submenu.maxVal[0] = LITE_MAX;    
+			submenu.minVal[0] = LITE_MIN;
+            submenu.maxVal[0] = LITE_MAX;    
             submenu.increment[0] = 10;             
             submenu.item[1] = settingLEDBrightness;
 			submenu.maxVal[1] = LED_MAIN_MAX;
