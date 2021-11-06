@@ -40,7 +40,7 @@
 #define LED_BTN_R 6        //TODO Button LED
 #define LED_BTN_L 6        //TODO Button LED
 #define LED_MAIN 5         //TODO PWM pin
-#define ALARM_LIGHT_MAX 0  //TODO Set
+#define LED_MAIN_MAX 255  //TODO Set
 
 // stepper pins
 #define STEP_IN1 A7
@@ -123,6 +123,8 @@ Date "11.09.2021":
 #define CLOCK_ITEMS 4		
 
 #define LITE 0  // standard brightness
+#define LITE_MAX 200 //max display brightness
+#define VOLUME_MAX 30 //max volume setting
 
 #define DCF_INT 6     // interval of dcf sync in hours
 #define DCF_HOUR 0    // hour to start dcf sync
@@ -210,10 +212,10 @@ volatile bool isrButtonR = false;
 
 // menu entries
 const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
-const char *soundOptions[SOUND_ITEMS] = {"Bell", "Horn", "Wedding", "Off"};
-const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Single" ,"Always", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
-const char *alarmOptions[ALARM_ITEMS] = {"Light+Sound", "Sound only", "Light only", "Off"};
-const char *clockOptions[CLOCK_ITEMS] = {"Light+Motor", "Light only", "Motor only", "Off"};
+const char *soundOptions[SOUND_ITEMS] = {"Off", "Bell", "Horn", "Wedding"};
+const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Once" ,"Every Day", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
+const char *alarmOptions[ALARM_ITEMS] = {"Off", "Light+Sound", "Sound only", "Light only"};
+const char *clockOptions[CLOCK_ITEMS] = {"Off", "Light+Motor", "Light only", "Motor only"};
 const char *dcfOptions[2] = {"DCF77 Off", "DCF77 On"};
 
     // Read settings from FRAM
@@ -250,8 +252,6 @@ bool stepperActive = false;			// Does the stepper run? Do not command any new mo
 uint16_t towerPosOffset = 0; 		// 0 o'clock light position (homing)
 uint16_t towerPos_last = 0; 		// To compare and check if a new position has to be commanded
 
-//display variable
-uint8_t brightness = LITE;
 
 //alarms
 struct alarms {
@@ -276,6 +276,7 @@ struct menuStruct {
     int8_t timeinfo_starts;
     uint8_t maxVal[SUBMENU_MAX_ITEMS];
     uint8_t minVal[SUBMENU_MAX_ITEMS];
+    uint8_t increment[SUBMENU_MAX_ITEMS];
 } submenu;
 
 bool weddingModeFinished = false;
@@ -285,7 +286,7 @@ void setup(void) {
    
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
-    analogWrite(TFT_LITE, brightness);
+    analogWrite(TFT_LITE, settingDisplayBrightness);
 
     // setup tower LED
     pinMode(LED_MAIN, OUTPUT);
@@ -397,9 +398,7 @@ void setup(void) {
     //canvasNormalFont.setTextSize(1);
     canvasNormalFont.setFont(&FreeSans12pt7b);
     canvasNormalFont.setTextSize(2);    
-
-    brightness = LITE; //set brightness
-    
+   
     // RTC startup
     pinMode(DS3231_INT, INPUT);
     myRTC.begin();
@@ -410,13 +409,14 @@ void setup(void) {
     attachInterrupt(digitalPinToInterrupt(DS3231_INT), isrChangeTime, FALLING);
     isrTimeChange = true;
     //myRTC.set(1631107034);
+    rtcavailable = true; 
     updateClock();
     if(isrTime > 0){
-        Serial.println("RTC set system time");
+        //Serial.println("RTC set system time");
         rtcavailable = true;
     }
     else{
-        Serial.println("Unable to sync with RTC");
+        //Serial.println("Unable to sync with RTC");
         rtcavailable = false;
     }
         
@@ -425,11 +425,11 @@ void setup(void) {
 
     // initialize FRAM
     if (fram.begin()){// you can stick the new i2c addr in here, e.g. begin(0x51);
-        Serial.println("Found FRAM");
+        //Serial.println("Found FRAM");
         framAvailable = true;
     }
     else{
-        Serial.println("FRAM error");
+        //Serial.println("FRAM error");
         framAvailable = false;
     }
 
@@ -437,7 +437,7 @@ void setup(void) {
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
     settingVolume = framread16bit(FRAM_VOLUME);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
-    settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
+    settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS); //ToDo ReEnable with FRAM
     settingDCFEnabled = framread16bit(FRAM_DCF_ENABLE);
 
 	// Read stored alarms from FRAM
@@ -543,46 +543,8 @@ void set_default_font(){
     tft.setTextColor(COLOR_TXT);
 }
 
-//StateMachine States
-////////////////////////////////////////////////////////////
-//S0 = main clock display
-void stateClockDisplay()
-{
-    if (updateScreen) {
-        //Serial.println("Entering ClockDisplay");
-        updateScreen = false;
-        updateClockSign = true;
-        drawClockDisplayInfo();
-        drawMenuSetter(1+4);
-        tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
-    }
-    if (isrTimeUpdate) {
-        isrTimeUpdate = false;
-        clockDisplay(isrTime);
-    }
-    if (DCFSyncChanged || tempChanged){
-        drawClockDisplayInfo();
-    }
-	/*if (isrButtonR) {							// Light button was pressed
-      isrButtonR = false;						// Reset Btn-flag
-      delay(50);
-      attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-	  alarmLightOn = true; 						// Turn on light flag
-	  analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch tower light
-	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
-	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
-	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
-	  alarmLightTimer = millis();				// (Re-)Start timer
-    }*/
-	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
-		alarmLightOn = false; 						// Turn on light flag
-		analogWrite(LED_MAIN, 0);					// Switch tower light
-		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
-		digitalWrite(LED_BTN_R, LOW);				// Switch btn LEDs off
-		digitalWrite(LED_BTN_L, LOW);				// Switch btn LEDs off
-	}
-}
-
+// Draw Menu Functions
+///////////////////////////////////////////////////////////
 void drawClockDisplayInfo(){
     tempChanged = false;
     DCFSyncChanged = false;
@@ -611,6 +573,116 @@ void drawClockDisplayInfo(){
     tft.drawBitmap(CLOCKDISPLAY_TEMP_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 }
 
+void drawSubMenuEntry(const char **menuOptions, uint8_t menuItem)
+{
+    if (updateScreen || submenu.selectedItem==menuItem){
+        drawSubMenuEntryText(menuOptions[submenu.item[menuItem]], menuItem);
+    }
+    else {
+    cursorY = cursorY + canvasSmallFont.height();
+    }
+}
+
+void drawSubMenuEntryText(const char *menuText, uint8_t menuItem)
+{
+    updateCanvasText(canvasSmallFont, menuText, submenu.selectedItem==menuItem);
+    tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+    cursorY = cursorY + canvasSmallFont.height();
+}
+
+// Draw menu to set alarms 
+void drawAlarmMenu(){
+    if (updateScreen) {
+        updateMenuSelection = true;
+    }
+    if (updateMenuSelection){      
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        uint8_t underline = 0;
+        // Draw Clock Setter
+        if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
+            if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
+            drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
+        }
+        cursorY = cursorY + canvasSmallFont.height();
+        drawSubMenuEntry(alarmTimeOptions, 2);
+        drawSubMenuEntry(alarmOptions, 3);
+        drawSubMenuEntry(soundOptions, 4);
+        
+        /*const char **menuOptions=NULL;
+        for (int i=2; i<5; i++)
+        {   
+            switch (i){
+                case 2: menuOptions = alarmTimeOptions; break;
+                case 3: menuOptions = alarmOptions; break;
+                case 4: menuOptions = soundOptions; break;
+            }
+            drawSubMenuEntry(menuOptions, i);
+            if (updateScreen || submenu.selectedItem==i){
+                updateCanvasText(canvasSmallFont, menuOptions[submenu.item[i]], submenu.selectedItem==i);
+                tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+            }
+        }*/
+        updateScreen = false;
+        updateMenuSelection = false;
+    }
+}
+
+void drawMenuTop(char *menuName)
+{
+    // Draw Top Icons
+    drawMenuSetter(2+4);
+    cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
+    tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+    cursorY = cursorY + MENULINEWIDTH+FONT_MARGIN+FONTSIZE_SMALL_HEIGHT+2;
+    // Write Center Entry
+    tft.getTextBounds(menuName, 0, cursorY, &x1, &y1, &w1, &h1);
+    cursorX = (uint8_t) ((TFT_WIDTH - TFT_MARGIN_LEFT - TFT_MARGIN_RIGHT - w1) / 2);
+    tft.setCursor(cursorX, cursorY);
+    tft.println(menuName);      
+    tft.fillRect(0,y1+h1+6,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT); 
+    cursorYMenuStart = y1+h1+6+MENULINEWIDTH+6;
+}
+//StateMachine States
+////////////////////////////////////////////////////////////
+//S0 = main clock display
+void stateClockDisplay()
+{
+    if (updateScreen) {
+        //Serial.println("Entering ClockDisplay");
+        updateScreen = false;
+        updateClockSign = true;
+        drawClockDisplayInfo();
+        drawMenuSetter(1+4);
+        tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+    }
+    if (isrTimeUpdate) {
+        isrTimeUpdate = false;
+        clockDisplay(isrTime);
+    }
+    if (DCFSyncChanged || tempChanged){
+        drawClockDisplayInfo();
+    }
+	/*if (isrButtonR) {							// Light button was pressed
+      isrButtonR = false;						// Reset Btn-flag
+      delay(50);
+      attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+	  alarmLightOn = true; 						// Turn on light flag
+	  analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch tower light
+	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+	  alarmLightTimer = millis();				// (Re-)Start timer
+    }*/
+	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
+		alarmLightOn = false; 						// Turn on light flag
+		analogWrite(LED_MAIN, 0);					// Switch tower light
+		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
+		digitalWrite(LED_BTN_R, LOW);				// Switch btn LEDs off
+		digitalWrite(LED_BTN_L, LOW);				// Switch btn LEDs off
+	}
+}
+
 // S1 = standby state
 void stateStandby()
 {
@@ -628,13 +700,13 @@ void stateAlarmActive()
 	if (isrTimeUpdate) {
         isrTimeUpdate = false;
         clockDisplay(isrTime);
-        analogWrite(TFT_LITE, brightness);
+        analogWrite(TFT_LITE, settingDisplayBrightness);
 	}
 	// Switch on and off the tower LED
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, LED_MAIN_MAX * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -675,21 +747,6 @@ void stateMainMenu()
 	}
 }
 
-void drawMenuTop(char *menuName)
-{
-    // Draw Top Icons
-    drawMenuSetter(2+4);
-    cursorY = TFT_MARGIN_TOP+MENU_TOPLINE_Y;
-    tft.fillRect(0,cursorY,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
-    cursorY = cursorY + MENULINEWIDTH+FONT_MARGIN+FONTSIZE_SMALL_HEIGHT+2;
-    // Write Center Entry
-    tft.getTextBounds(menuName, 0, cursorY, &x1, &y1, &w1, &h1);
-    cursorX = (uint8_t) ((TFT_WIDTH - TFT_MARGIN_LEFT - TFT_MARGIN_RIGHT - w1) / 2);
-    tft.setCursor(cursorX, cursorY);
-    tft.println(menuName);      
-    tft.fillRect(0,y1+h1+6,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT); 
-    cursorYMenuStart = y1+h1+6+MENULINEWIDTH+6;
-}
 
 //S3
 void stateWeddingMode()
@@ -730,58 +787,16 @@ void stateClockMenu()
             updateCanvasDate(canvasSmallFont, submenu.item[2], submenu.item[3], submenu.item[4], underline);
             tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
          }
-        // Draw Clock Mode Setter
         cursorY = cursorY + canvasSmallFont.height();
-        if (updateScreen || submenu.selectedItem==5){
-            if (submenu.selectedItem==5) {underline=true;}
-            else {underline=false;}
-            updateCanvasText(canvasSmallFont, clockOptions[submenu.item[5]], underline);
-            tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
-        }
-        // Draw DCF77 Mode Selector
-        cursorY = cursorY + canvasSmallFont.height();
-        if (updateScreen || submenu.selectedItem==6){
-            updateCanvasText(canvasSmallFont, dcfOptions[submenu.item[6]], submenu.selectedItem==6);
-            tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
-        }
+        drawSubMenuEntry(clockOptions, 5);
+        drawSubMenuEntry(dcfOptions, 6);
+
         updateScreen = false;
         updateMenuSelection = false;
     }
 }
 
-// Draw menu to set alarms 
-void drawAlarmMenu(){
-    if (updateScreen) {
-        updateMenuSelection = true;
-    }
-    if (updateMenuSelection){      
-        cursorY = cursorYMenuStart;
-        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
-        uint8_t underline = 0;
-        // Draw Clock Setter
-        if (updateScreen || submenu.selectedItem==0 || submenu.selectedItem==1){
-            if (submenu.selectedItem==0 || submenu.selectedItem==1){underline=submenu.selectedItem+1;}
-            drawClock(canvasSmallFont, submenu.item[0], submenu.item[1], cursorX, cursorY, underline);      
-        }
-        
-        const char **menuOptions=NULL;
-        for (int i=2; i<5; i++)
-        {   
-            cursorY = cursorY + canvasSmallFont.height();
-            switch (i){
-                case 2: menuOptions = alarmTimeOptions; break;
-                case 3: menuOptions = alarmOptions; break;
-                case 4: menuOptions = soundOptions; break;
-            }
-            if (updateScreen || submenu.selectedItem==i){
-                updateCanvasText(canvasSmallFont, menuOptions[submenu.item[i]], submenu.selectedItem==i);
-                tft.drawBitmap(cursorX, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
-            }
-        }
-        updateScreen = false;
-        updateMenuSelection = false;
-    }
-}
+
 
 //S5
 void stateAlarm1Menu()
@@ -796,14 +811,20 @@ void stateAlarm2Menu()
 }
 
 //S7
-void stateSoundMenu()
+void stateSoundMenu(const char *menuOptions)
 {
     if (updateScreen) {
+        updateMenuSelection = true;
+    }
+    if (updateMenuSelection){
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
+        drawSubMenuEntryText(outString, 0);
         updateScreen = false;
-        drawNotImplementedMessage();
+        updateMenuSelection = false;
     }
     //Set Volume 0 - 30
-
 }
 
 //S8
@@ -821,12 +842,26 @@ void stateLighthouseMenu()
 //S9
 void stateBrightnessMenu()
 {
+{
     if (updateScreen) {
-        updateScreen = false;
-        drawNotImplementedMessage();
+        updateMenuSelection = true;
     }
+    if (updateMenuSelection){
+        cursorY = cursorYMenuStart;
+        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
+        sprintf(outString, "Display %d%%", (100*submenu.item[0]/LITE_MAX));
+        drawSubMenuEntryText(outString, 0);
+        sprintf(outString, "LED %d%%", (100*submenu.item[1]/LED_MAIN_MAX));
+        drawSubMenuEntryText(outString, 0);
+        updateScreen = false;
+        updateMenuSelection = false;
+    }
+    //Set Volume 0 - 30
+}
     //Brightness Setting for Display
     //MainLED?
+
+    analogWrite(TFT_LITE, settingDisplayBrightness);
 }
 
 //S10
@@ -862,7 +897,7 @@ void stateCreditsMenu()
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, LED_MAIN_MAX * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -895,7 +930,7 @@ bool wakeup()
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-      analogWrite(TFT_LITE, brightness);
+      analogWrite(TFT_LITE, settingDisplayBrightness);
       return true;
     }
     return false;
@@ -989,7 +1024,7 @@ bool startAlarm()
 		alarmTotalTimer = millis();				// Start timer for max alarm time
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+		analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch on tower light (real)
 		/////////////////////////////////////
 		// TODO
 		// Start MP3-Player
@@ -1086,7 +1121,7 @@ bool openCreditsMenu()
         openSuBMenu();
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+		analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch on tower light (real)
         return true;   
     }
     return false;
@@ -1170,7 +1205,10 @@ bool saveReturnToMainMenu()
                 // Update Alarms for next call
                 recalcAlarm(alm2);
                 break;            
-            
+            case 3:
+                //Sound Menu
+                settingVolume = submenu.item[0];
+                framwrite16bit(FRAM_VOLUME, settingVolume);
             case 8:
                 //Credits
                 submenu.num_items = 0;
@@ -1196,6 +1234,7 @@ void openSuBMenu()
     for (int i=0; i<SUBMENU_MAX_ITEMS; i++){
         submenu.maxVal[i] = 0;
         submenu.minVal[i] = 0;
+        submenu.increment[i] = 1;
     }
     switch (selectedMMItem){
         case 0:
@@ -1238,6 +1277,23 @@ void openSuBMenu()
             submenu.item[4] = alm2.soundfile;
 			submenu.maxVal[4] = SOUND_ITEMS-1;
             break;
+		case 3:
+            //Sound
+            submenu.num_items = 1; 
+            submenu.item[0] = settingVolume;
+			submenu.maxVal[0] = VOLUME_MAX;
+            break;
+        case 5:
+            //Brigthness
+            submenu.num_items = 2; 
+            submenu.item[0] = settingDisplayBrightness;
+			submenu.maxVal[0] = LITE_MAX;    
+            submenu.increment[0] = 10;             
+            submenu.item[1] = settingLEDBrightness;
+			submenu.maxVal[1] = LED_MAIN_MAX;
+            submenu.increment[1] = 17;     
+            break;
+
         case 8:
             //Credits
             submenu.num_items = 0;
@@ -1272,13 +1328,13 @@ bool changeSubMenuSelection()
         updateMenuSelection = true;
         if (isrButtonL){
             isrButtonL = false;
-            submenu.item[submenu.selectedItem] --;
+            submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]-submenu.increment[submenu.selectedItem];
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         }
         else {
             isrButtonR = false;
-            submenu.item[submenu.selectedItem] ++; 
+            submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]+submenu.increment[submenu.selectedItem];
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
@@ -1377,7 +1433,7 @@ bool changeToWeddingMode()
         stepperActive = true;
         stepper.newMove(false, 36000);
         //Serial.println("Start Player");
-        analogWrite(LED_MAIN, 255);
+        analogWrite(LED_MAIN, LED_MAIN_MAX);
         analogWrite(LED_BTN_C, 255);
         myDFPlayer.volume(settingVolume);
         myDFPlayer.loop(1);
@@ -1664,7 +1720,7 @@ void clockDisplay(time_t t)
         drawClockItems(canvasClock, CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT, CLOCKDISPLAY_CLOCK_Y+TFT_MARGIN_TOP, 0);
     }
     if (clockMinute != minute(t)){
-        sprintf(outString, ("Moving stepper due to Minute: %02d, %02d", clockMinute, minute(t)));
+        //sprintf(outString, ("Moving stepper due to Minute: %02d, %02d", clockMinute, minute(t)));
         //Serial.println(outString);
         clockMinute = minute(t);
         updateCanvasClock(canvasClock, clockMinute, false);
