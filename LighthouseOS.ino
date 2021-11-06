@@ -1530,6 +1530,7 @@ void updateClock()
         isrTime = myRTC.get();
         myRTC.alarm(ALARM_2);
     }
+    update_temperature();
 }
 
 void updateCanvasText(GFXcanvas1& cCanvas, char *text, bool underline)
