@@ -671,7 +671,7 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
-	if (isrButtonR) {							// Light button was pressed
+	/*if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
@@ -688,7 +688,7 @@ void stateClockDisplay()
 		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
 		digitalWrite(LED_BTN_R, LOW);				// Switch btn LEDs off
 		digitalWrite(LED_BTN_L, LOW);				// Switch btn LEDs off
-	}
+	}*/
 }
 
 // S1 = standby state
@@ -890,14 +890,14 @@ void stateCreditsMenu()
         tft.setFont(&FreeSans12pt7b);
         tft.setTextSize(1);
         tft.setCursor(0, cursorYMenuStart+FONTSIZE_SMALL_HEIGHT);
-        tft.println("  Not All Who Wander");
-        tft.println("  Are Lost!");
+        tft.println("  Frauke");
+        tft.println("  Christian");
         //tft.setFont();
         //tft.setTextSize(2);
         //tft.println(" ");
         tft.setFont(&FreeSans12pt7b);
         tft.setTextSize(1);
-        tft.println("  Frauke, Christian, Hans &");
+        tft.println("  Hans");
         tft.println("  Ben");
         set_default_font();
     }
@@ -1343,6 +1343,9 @@ bool changeSubMenuSelection()
             submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]+submenu.increment[submenu.selectedItem];
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
+        }
+        checkSubMenuItemValidity(submenu.selectedItem);
+            return true;
         }
     return false;
 }
@@ -1850,7 +1853,7 @@ bool checkAlarm (struct alarms &alm){
 					}
 					break;
 		}
-		checkAlarms = alm.soundfile;
+		soundfile_actual = alm.soundfile;
 		return true;
 	}
 	return false;
