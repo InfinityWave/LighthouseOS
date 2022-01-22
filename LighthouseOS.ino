@@ -246,7 +246,8 @@ time_t tmpTime = 0;
 tmElements_t tmp_tm;
 uint32_t alarmTotalTimer = 0;		// Timer to stop alarm after some time (if noone is at home to press the button)
 uint32_t alarmTotalDelay = 120000;	// 2 min
-uint8_t soundfile_actual = 0;
+uint8_t alm_soundfile_actual = 0;
+uint8_t alm_towermode_actual = 0;
 
 // Stepper and tower variables
 bool moveTower = true;
@@ -1025,15 +1026,21 @@ bool stopAlarm()
 bool startAlarm()
 {
 	if (checkAlarms()) {
-		digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
-		digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
-		digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
-		alarmTotalTimer = millis();				// Start timer for max alarm time
-		alarmLightTimer = millis();				// Start timer for light
-		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
-		myDFPlayer.volume(settingVolume);		// Set sound Volume
-        myDFPlayer.loop(soundfile_actual);		// Start MP3-Player (actual sound is selected in checkAlarms)
+		// Light + Sound OR Light Only
+		if ((alm_towermode_actual == 1)||(alm_towermode_actual == 3)){
+			digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
+			digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
+			digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+			alarmTotalTimer = millis();				// Start timer for max alarm time
+			alarmLightTimer = millis();				// Start timer for light
+			alarmLightOn = true;					// Switch on tower light (flag)
+			analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+		}
+		// Light + Sound OR Sound Only
+		if ((alm_towermode_actual == 1)||(alm_towermode_actual == 2)){
+			myDFPlayer.volume(settingVolume);		// Set sound Volume
+			myDFPlayer.loop(alm_soundfile_actual);		// Start MP3-Player (actual sound is selected in checkAlarms)
+		}
 		return true;
     }
 	return false;
@@ -1853,7 +1860,8 @@ bool checkAlarm (struct alarms &alm){
 					}
 					break;
 		}
-		soundfile_actual = alm.soundfile;
+		alm_soundfile_actual = alm.soundfile;
+		alm_towermode_actual = alm.towermode;
 		return true;
 	}
 	return false;
