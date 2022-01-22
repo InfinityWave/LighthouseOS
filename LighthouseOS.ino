@@ -124,7 +124,7 @@ Date "11.09.2021":
 
 #define LITE 200  // standard brightness
 #define LITE_MIN 10 //max display brightness
-#define LITE_MAX 200 //max display brightness
+#define LITE_MAX 255 //max display brightness
 #define VOLUME_MAX 30 //max volume setting
 
 #define DCF_INT 6     // interval of dcf sync in hours
@@ -433,13 +433,14 @@ void setup(void) {
     settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
     // Override 0 Display brightness
     if (! settingDisplayBrightness){
-        settingDisplayBrightness = LITE_MIN;
+        settingDisplayBrightness = LITE_MAX;
     }
     settingDCFEnabled = framread16bit(FRAM_DCF_ENABLE);
 
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
-    analogWrite(TFT_LITE, settingDisplayBrightness);
+    //analogWrite(TFT_LITE, settingDisplayBrightness);
+    digitalWrite(TFT_LITE, true);
 
     // setup tower LED
     pinMode(LED_MAIN, OUTPUT);
@@ -706,7 +707,10 @@ void stateAlarmActive()
 	if (isrTimeUpdate) {
         isrTimeUpdate = false;
         clockDisplay(isrTime);
-        analogWrite(TFT_LITE, settingDisplayBrightness);
+        
+        //analogWrite(TFT_LITE, settingDisplayBrightness);
+        digitalWrite(TFT_LITE, true);
+        
 	}
 	// Switch on and off the tower LED
 	if (millis() - alarmLightTimer > alarmLightDelay) {
@@ -867,7 +871,8 @@ void stateBrightnessMenu()
     //Brightness Setting for Display
     //MainLED?
 
-    analogWrite(TFT_LITE, settingDisplayBrightness);
+    //analogWrite(TFT_LITE, settingDisplayBrightness);
+    digitalWrite(TFT_LITE, true);
 }
 
 //S10
@@ -917,7 +922,8 @@ void stateCreditsMenu()
 bool toSleep()
 {
     if (millis() - sleepTimer >  + sleepDelay) {
-        analogWrite(TFT_LITE, 0);
+        //analogWrite(TFT_LITE, 0);
+        digitalWrite(TFT_LITE, 0);
         return true;
     }
     return false;
@@ -936,7 +942,8 @@ bool wakeup()
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-      analogWrite(TFT_LITE, settingDisplayBrightness);
+      //analogWrite(TFT_LITE, settingDisplayBrightness);
+      digitalWrite(TFT_LITE, true);
       return true;
     }
     return false;
