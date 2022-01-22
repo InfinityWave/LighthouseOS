@@ -40,7 +40,7 @@
 #define LED_BTN_R 6        //TODO Button LED
 #define LED_BTN_L 6        //TODO Button LED
 #define LED_MAIN 5         //TODO PWM pin
-#define LED_MAIN_MAX 255  //TODO Set
+#define ALARM_LIGHT_MAX 255
 
 // stepper pins
 #define STEP_IN1 A7
@@ -246,6 +246,7 @@ time_t tmpTime = 0;
 tmElements_t tmp_tm;
 uint32_t alarmTotalTimer = 0;		// Timer to stop alarm after some time (if noone is at home to press the button)
 uint32_t alarmTotalDelay = 120000;	// 2 min
+uint8_t soundfile_actual = 0;
 
 // Stepper and tower variables
 bool moveTower = true;
@@ -283,7 +284,7 @@ struct menuStruct {
 bool weddingModeFinished = false;
 
 void setup(void) {
-    Serial.begin(9600);
+    //Serial.begin(9600);
    
     //stepper setup
     stepper.setRpm(STEP_RPM);
@@ -670,17 +671,17 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
-	/*if (isrButtonR) {							// Light button was pressed
+	if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
 	  alarmLightOn = true; 						// Turn on light flag
-	  analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch tower light
+	  analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch tower light
 	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
-    }*/
+    }
 	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
 		alarmLightOn = false; 						// Turn on light flag
 		analogWrite(LED_MAIN, 0);					// Switch tower light
@@ -716,17 +717,13 @@ void stateAlarmActive()
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, LED_MAIN_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
 		stepperActive	= true;									// Set flag to make sure no other movement is commanded
 		stepper.newMoveDegreesCCW(360);							// Command one full rev
 	}
-		/////////////////////////////////////
-		// TODO
-		// Make sure MP3 is running
-		/////////////////////////////////////
 }
 
 //S2 = main menu
@@ -861,7 +858,7 @@ void stateBrightnessMenu()
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         sprintf(outString, "Display %d%%", (100*submenu.item[0]/LITE_MAX));
         drawSubMenuEntryText(outString, 0);
-        sprintf(outString, "LED %d%%", (100*submenu.item[1]/LED_MAIN_MAX));
+        sprintf(outString, "LED %d%%", (100*submenu.item[1]/ALARM_LIGHT_MAX));
         drawSubMenuEntryText(outString, 0);
         updateScreen = false;
         updateMenuSelection = false;
@@ -908,7 +905,7 @@ void stateCreditsMenu()
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, LED_MAIN_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -1017,11 +1014,8 @@ bool stopAlarm()
 	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
-	  
-	  /////////////////////////////////////
-	  // TODO
-	  // Stop MP3-Player
-	  /////////////////////////////////////
+	  myDFPlayer.stop();					// Stop MP3-Player
+
       return true;
     }
     return false;
@@ -1037,11 +1031,9 @@ bool startAlarm()
 		alarmTotalTimer = millis();				// Start timer for max alarm time
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch on tower light (real)
-		/////////////////////////////////////
-		// TODO
-		// Start MP3-Player
-		/////////////////////////////////////
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+		myDFPlayer.volume(settingVolume);		// Set sound Volume
+        myDFPlayer.loop(soundfile_actual);		// Start MP3-Player (actual sound is selected in checkAlarms)
 		return true;
     }
 	return false;
@@ -1134,7 +1126,7 @@ bool openCreditsMenu()
         openSuBMenu();
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, LED_MAIN_MAX);	// Switch on tower light (real)
+		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
         return true;   
     }
     return false;
@@ -1304,7 +1296,7 @@ void openSuBMenu()
             submenu.maxVal[0] = LITE_MAX;    
             submenu.increment[0] = 10;             
             submenu.item[1] = settingLEDBrightness;
-			submenu.maxVal[1] = LED_MAIN_MAX;
+			submenu.maxVal[1] = ALARM_LIGHT_MAX;
             submenu.increment[1] = 17;     
             break;
 
@@ -1352,9 +1344,6 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-        checkSubMenuItemValidity(submenu.selectedItem);
-        return true;
-    }
     return false;
 }
 
@@ -1392,7 +1381,6 @@ void checkSubMenuItemValidity(uint8_t selectedItem)
 ///////////////////////////////
 void correct_date(int16_t *date)
 {
-    // Check the date and correct based on calendar
     // date must be an array with 1st entry hour, than minute, day, month, year
 
     // Check if leap year
@@ -1447,7 +1435,7 @@ bool changeToWeddingMode()
         stepperActive = true;
         stepper.newMove(false, 36000);
         //Serial.println("Start Player");
-        analogWrite(LED_MAIN, LED_MAIN_MAX);
+        analogWrite(LED_MAIN, ALARM_LIGHT_MAX);
         analogWrite(LED_BTN_C, 255);
         myDFPlayer.volume(settingVolume);
         myDFPlayer.loop(1);
@@ -1862,6 +1850,7 @@ bool checkAlarm (struct alarms &alm){
 					}
 					break;
 		}
+		checkAlarms = alm.soundfile;
 		return true;
 	}
 	return false;
