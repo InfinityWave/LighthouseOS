@@ -277,8 +277,8 @@ struct menuStruct {
 bool weddingModeFinished = false;
 
 void setup(void) {
-    Serial.begin(9600);
-    Serial.println("Begin Startup");
+    //Serial.begin(9600);
+    //Serial.println("Begin Startup");
     
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
@@ -366,17 +366,17 @@ void setup(void) {
 	S99->addTransition(&stopAlarm,S2);
 	S99->addTransition(&reAttachUnhandledInterrupts,S99);
 	
-    Serial.println("Begin Display startup");
+    //Serial.println("Begin Display startup");
     // TFT setup
     delay(500);
     tft.begin();
-    Serial.println("Display startup complete");
+    //Serial.println("Display startup complete");
     tft.setTextColor(COLOR_TXT);
-    Serial.println("Set Color");
+    //Serial.println("Set Color");
     tft.setRotation(3);
-    Serial.println("Rotation");
+    //Serial.println("Rotation");
     tft.fillScreen(COLOR_BKGND);
-    Serial.println("Screen filled");
+    //Serial.println("Screen filled");
     set_default_font();
     //canvasClock.setFont(&FreeSans18pt7b);
     //canvasClock.setTextSize(2);
@@ -409,19 +409,20 @@ void setup(void) {
     isrTimeChange = true;
     //myRTC.set(1631107034);
     updateClock();
-    if(isrTime > 0)
+    /*if(isrTime > 0)
         Serial.println("RTC has set the system time");
     else
         Serial.println("Unable to sync with the RTC");
+	*/
         
     prepareClock();
 
     // initialize FRAM
     if (fram.begin())// you can stick the new i2c addr in here, e.g. begin(0x51);
-        Serial.println("Found I2C FRAM");
+        //Serial.println("Found I2C FRAM");
         framAvailable = true;
     else
-        Serial.println("I2C FRAM not identified");
+        //Serial.println("I2C FRAM not identified");
         framAvailable = false;
 
     // Read settings from FRAM
@@ -453,12 +454,12 @@ void setup(void) {
     pinMode(BTN_L, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
     update_temperature();
-    Serial.println("Startup Almost Complete");
+    //Serial.println("Startup Almost Complete");
     Serial1.begin(9600); //Hardware Serial for MP3
-    Serial.println("Startup Nearly Complete");
+    //Serial.println("Startup Nearly Complete");
     myDFPlayer.begin(Serial1);
     
-    Serial.println("Startup Complete");
+    //Serial.println("Startup Complete");
 }
 
 void loop()
@@ -496,7 +497,7 @@ void loop()
         dcfSyncSucc = false;
         DCFSyncStatus = false;
         DCFSyncChanged = true;
-        Serial.println("Sync Failed");
+        //Serial.println("Sync Failed");
     }
     if (dcfSync && DCF.getTime() != 0) {
         DCF.Stop();
@@ -538,7 +539,7 @@ void set_default_font(){
 void stateClockDisplay()
 {
     if (updateScreen) {
-        Serial.println("Entering ClockDisplay");
+        //Serial.println("Entering ClockDisplay");
         updateScreen = false;
         updateClockSign = true;
         drawClockDisplayInfo();
@@ -716,8 +717,9 @@ void stateClockMenu()
         cursorY = cursorY + canvasSmallFont.height();
         if (updateScreen || submenu.selectedItem==5){
             //Serial.println("Displaying Option Text");
-            if (submenu.selectedItem==5) { underline=true; Serial.println("Underline");}
-            else {underline=false;}
+            if (submenu.selectedItem==5) { 
+				underline=true;
+            }else {underline=false;}
             //Serial.println("Displaying Option Text now");
             //Serial.println(clockOptions[submenu.item[5]]);
             //Serial.println(submenu.item[5]);
@@ -1267,7 +1269,7 @@ bool changeSubMenuSelection()
             delay(50);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
-         //Serial.println("Before Corrections:");
+        //Serial.println("Before Corrections:");
         //Serial.println(submenu.item[submenu.selectedItem]);
         // Correct date if enabled for this submenu
         if (submenu.dateinfo_starts >=0){
