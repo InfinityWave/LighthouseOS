@@ -439,8 +439,8 @@ void setup(void) {
 
     // setup TFT Backlight as off
     pinMode(TFT_LITE, OUTPUT);
-    //analogWrite(TFT_LITE, settingDisplayBrightness);
-    digitalWrite(TFT_LITE, true);
+    analogWrite(TFT_LITE, settingDisplayBrightness);
+    //digitalWrite(TFT_LITE, true);
 
     // setup tower LED
     pinMode(LED_MAIN, OUTPUT);
@@ -708,8 +708,8 @@ void stateAlarmActive()
         isrTimeUpdate = false;
         clockDisplay(isrTime);
         
-        //analogWrite(TFT_LITE, settingDisplayBrightness);
-        digitalWrite(TFT_LITE, true);
+        analogWrite(TFT_LITE, settingDisplayBrightness);
+        //digitalWrite(TFT_LITE, true);
         
 	}
 	// Switch on and off the tower LED
@@ -871,8 +871,8 @@ void stateBrightnessMenu()
     //Brightness Setting for Display
     //MainLED?
 
-    //analogWrite(TFT_LITE, settingDisplayBrightness);
-    digitalWrite(TFT_LITE, true);
+    analogWrite(TFT_LITE, settingDisplayBrightness);
+    //digitalWrite(TFT_LITE, true);
 }
 
 //S10
@@ -922,8 +922,8 @@ void stateCreditsMenu()
 bool toSleep()
 {
     if (millis() - sleepTimer >  + sleepDelay) {
-        //analogWrite(TFT_LITE, 0);
-        digitalWrite(TFT_LITE, 0);
+        analogWrite(TFT_LITE, 0);
+        //digitalWrite(TFT_LITE, 0);
         return true;
     }
     return false;
@@ -942,8 +942,8 @@ bool wakeup()
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-      //analogWrite(TFT_LITE, settingDisplayBrightness);
-      digitalWrite(TFT_LITE, true);
+      analogWrite(TFT_LITE, settingDisplayBrightness);
+      //digitalWrite(TFT_LITE, true);
       return true;
     }
     return false;
