@@ -40,7 +40,7 @@
 #define LED_BTN_R 6        //TODO Button LED
 #define LED_BTN_L 6        //TODO Button LED
 #define LED_MAIN 5         //TODO PWM pin
-#define ALARM_LIGHT_MAX 0  //TODO Set
+#define ALARM_LIGHT_MAX 255
 
 // stepper pins
 #define STEP_IN1 A7
@@ -552,7 +552,7 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
-	/*if (isrButtonR) {							// Light button was pressed
+	if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
@@ -562,7 +562,7 @@ void stateClockDisplay()
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
-    }*/
+    }
 	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
 		alarmLightOn = false; 						// Turn on light flag
 		analogWrite(LED_MAIN, 0);					// Switch tower light
