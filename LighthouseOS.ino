@@ -236,6 +236,7 @@ bool alarmLightOn = false;			// If tower light is on
 time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
 uint32_t alarmTotalTimer = 0;		// Timer to stop alarm after some time (if noone is at home to press the button)
 uint32_t alarmTotalDelay = 120000;	// 2 min
+uint8_t soundfile_actual = 0;
 
 // Stepper and tower variables
 bool moveTower = true;
@@ -253,7 +254,7 @@ struct alarms {
     uint8_t dd;			// Not used outside of read and write FRAM
     bool act;			// Not used outside of read and write FRAM
     bool light;			// Not used outside of read and write FRAM
-    uint8_t soundfile;	// Not used outside of read and write FRAM
+    uint8_t soundfile;	// The number of the sound file to play
     time_t nextAlarm; // Time stamp of next alarm. Will not be stored on FRAM
 	uint8_t mode; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 } alm1, alm2;
@@ -629,10 +630,6 @@ void stateAlarmActive()
 		stepperActive	= true;									// Set flag to make sure no other movement is commanded
 		stepper.newMoveDegreesCCW(360);							// Command one full rev
 	}
-		/////////////////////////////////////
-		// TODO
-		// Make sure MP3 is running
-		/////////////////////////////////////
 }
 
 //S2 = main menu
@@ -962,11 +959,8 @@ bool stopAlarm()
 	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
-	  
-	  /////////////////////////////////////
-	  // TODO
-	  // Stop MP3-Player
-	  /////////////////////////////////////
+	  myDFPlayer.stop();					// Stop MP3-Player
+
       return true;
     }
     return false;
@@ -983,10 +977,8 @@ bool startAlarm()
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
 		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
-		/////////////////////////////////////
-		// TODO
-		// Start MP3-Player
-		/////////////////////////////////////
+		myDFPlayer.volume(settingVolume);		// Set sound Volume
+        myDFPlayer.loop(soundfile_actual);		// Start MP3-Player (actual sound is selected in checkAlarms)
 		return true;
     }
 	return false;
@@ -1825,6 +1817,7 @@ bool checkAlarm (struct alarms &alm){
 					}
 					break;
 		}
+		checkAlarms = alm.soundfile;
 		return true;
 	}
 	return false;
