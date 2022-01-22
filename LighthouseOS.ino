@@ -808,6 +808,7 @@ void stateSoundMenu(const char *menuOptions)
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
         drawSubMenuEntryText(outString, 0);
+		drawSubMenuEntry(clockOptions, 1);
         updateScreen = false;
         updateMenuSelection = false;
     }
@@ -1125,6 +1126,8 @@ bool saveReturnToMainMenu()
                 //Sound Menu
                 settingVolume = submenu.item[0];
                 framwrite16bit(FRAM_VOLUME, settingVolume);
+				settingClock = submenu.item[1];
+				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
             case 8:
                 //Credits
                 submenu.num_items = 0;
