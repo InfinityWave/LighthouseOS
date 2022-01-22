@@ -113,14 +113,14 @@ Date "11.09.2021":
 #define MENU_SEL_Y 133 //Selector Icon Y-Pos
 #define MENU_SEL_SIZE 5 //Selector Icon Size
 //SpecialMenuSettings
-#define MAINMENU_ITEMS 9    // number of menu entries
+#define MAINMENU_ITEMS 7    // number of menu entries
 #define MAINMENU_TXT_X 120
 //SpecialSubMenuSettings
 #define SUBMENU_MAX_ITEMS 8
 #define SOUND_ITEMS 4
 #define ALARM_ITEMS 4
 #define ALARMTIME_ITEMS 5 // Number of modes for alarms 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
-#define CLOCK_ITEMS 4		
+#define CLOCK_ITEMS 2		
 
 #define LITE 200  // standard brightness
 #define LITE_MIN 10 //max display brightness
@@ -168,8 +168,6 @@ State* S5 = machine.addState(&stateAlarm1Menu);
 State* S6 = machine.addState(&stateAlarm2Menu);
 State* S7 = machine.addState(&stateSoundMenu);
 State* S8 = machine.addState(&stateLighthouseMenu);
-State* S9 = machine.addState(&stateBrightnessMenu);
-State* S10 = machine.addState(&stateHomingMenu);
 State* S11 = machine.addState(&stateCreditsMenu);
 
 State* S99 = machine.addState(&stateAlarmActive); // State for active alarm
@@ -212,15 +210,15 @@ volatile bool isrButtonL = false;
 volatile bool isrButtonR = false;
 
 // menu entries
-const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Brightness", "Homing", "Credits", "Back"};
+const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Credits", "Back"};
 const char *soundOptions[SOUND_ITEMS] = {"Off", "Bell", "Horn", "Wedding"};
 const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Once" ,"Every Day", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 const char *alarmOptions[ALARM_ITEMS] = {"Off", "Light+Sound", "Sound only", "Light only"};
-const char *clockOptions[CLOCK_ITEMS] = {"Off", "Light+Motor", "Light only", "Motor only"};
+const char *clockOptions[CLOCK_ITEMS] = {"Off", "Motor"};
 const char *dcfOptions[2] = {"DCF77 Off", "DCF77 On"};
 
     // Read settings from FRAM
-uint16_t settingClock; 
+uint16_t settingClock; 						// Setting from clockOptions
 uint16_t settingVolume = 17;
 uint16_t settingLEDBrightness;
 uint16_t settingDisplayBrightness;
@@ -252,7 +250,7 @@ uint8_t alm_towermode_actual = 0;
 // Stepper and tower variables
 bool moveTower = true;
 bool stepperActive = false;			// Does the stepper run? Do not command any new movement before the last one is finished
-uint16_t towerPosOffset = 0; 		// 0 o'clock light position (homing)
+uint16_t towerPosOffset = 0; 		// 0 o'clock light position
 uint16_t towerPos_last = 0; 		// To compare and check if a new position has to be commanded
 
 
@@ -313,8 +311,6 @@ void setup(void) {
     S2->addTransition(&openAlarm2Menu,S6);
     S2->addTransition(&openSoundMenu,S7);
     S2->addTransition(&openLighthouseMenu,S8);
-    S2->addTransition(&openBrigthnessMenu,S9);
-    S2->addTransition(&openHomingMenu,S10);
     S2->addTransition(&openCreditsMenu,S11);
 	S2->addTransition(&startAlarm,S99); // check and start alarm
     //S2->addTransition(&anyButtonPressed,S2);   //Must be last item
@@ -351,16 +347,6 @@ void setup(void) {
     S8->addTransition(&saveReturnToMainMenu,S2);
     S8->addTransition(&changeSubMenuSelection,S8);
 	S8->addTransition(&startAlarm,S99); // check and start alarm
-    //Brightness Menu
-    S9->addTransition(&returnToClockDisplay,S0); //After timeout
-    S9->addTransition(&returnToMainMenu,S2);
-    S9->addTransition(&saveReturnToMainMenu,S2);
-    S9->addTransition(&changeSubMenuSelection,S9);
-	S9->addTransition(&startAlarm,S99); // check and start alarm
-    //Homing Menu
-    S10->addTransition(&returnToClockDisplay,S0); //After timeout
-    S10->addTransition(&anyButtonPressed,S2);
-	S10->addTransition(&startAlarm,S99); // check and start alarm
     //Credits Menu
     S11->addTransition(&returnToClockDisplay,S0); //After timeout
 	S11->addTransition(&anyButtonPressed,S2);
@@ -672,7 +658,7 @@ void stateClockDisplay()
     if (DCFSyncChanged || tempChanged){
         drawClockDisplayInfo();
     }
-	/*if (isrButtonR) {							// Light button was pressed
+	if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
@@ -689,7 +675,7 @@ void stateClockDisplay()
 		digitalWrite(LED_BTN_C, LOW);				// Switch btn LEDs off
 		digitalWrite(LED_BTN_R, LOW);				// Switch btn LEDs off
 		digitalWrite(LED_BTN_L, LOW);				// Switch btn LEDs off
-	}*/
+	}
 }
 
 // S1 = standby state
@@ -847,41 +833,6 @@ void stateLighthouseMenu()
     //Main Light Settings
 }
 
-//S9
-void stateBrightnessMenu()
-{
-{
-    if (updateScreen) {
-        updateMenuSelection = true;
-    }
-    if (updateMenuSelection){
-        cursorY = cursorYMenuStart;
-        cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
-        sprintf(outString, "Display %d%%", (100*submenu.item[0]/LITE_MAX));
-        drawSubMenuEntryText(outString, 0);
-        sprintf(outString, "LED %d%%", (100*submenu.item[1]/ALARM_LIGHT_MAX));
-        drawSubMenuEntryText(outString, 0);
-        updateScreen = false;
-        updateMenuSelection = false;
-    }
-    //Set Volume 0 - 30
-}
-    //Brightness Setting for Display
-    //MainLED?
-
-    analogWrite(TFT_LITE, settingDisplayBrightness);
-    //digitalWrite(TFT_LITE, true);
-}
-
-//S10
-void stateHomingMenu()
-{
-    if (updateScreen) {
-        updateScreen = false;
-        drawNotImplementedMessage();
-    }
-    //Motor Homing Procedure
-}
 
 //S11
 void stateCreditsMenu()
@@ -1117,14 +1068,6 @@ bool openBrigthnessMenu()
     return false;
 }
 
-bool openHomingMenu()
-{
-    if (isrButtonC  && (selectedMMItem == 6)){
-        openSuBMenu();
-        return true;   
-    }
-    return false;
-}
 
 // Credits (with tower light on)
 bool openCreditsMenu()
@@ -1295,17 +1238,6 @@ void openSuBMenu()
             submenu.item[0] = settingVolume;
 			submenu.maxVal[0] = VOLUME_MAX;
             break;
-        case 5:
-            //Brigthness
-            submenu.num_items = 2; 
-            submenu.item[0] = settingDisplayBrightness;
-			submenu.minVal[0] = LITE_MIN;
-            submenu.maxVal[0] = LITE_MAX;    
-            submenu.increment[0] = 10;             
-            submenu.item[1] = settingLEDBrightness;
-			submenu.maxVal[1] = ALARM_LIGHT_MAX;
-            submenu.increment[1] = 17;     
-            break;
 
         case 8:
             //Credits
@@ -1435,8 +1367,8 @@ void correct_time(int16_t *dtime)
 
 bool changeToWeddingMode()
 {
-    if(isrButtonR){
-        isrButtonR = false;    
+    if(isrButtonL){
+        isrButtonL = false;    
         delay(100);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         //Serial.println("Entering WeddingMode");
@@ -1786,9 +1718,11 @@ void updateTowerLight(time_t t){
 		}else{
 			towerWay = towerPos+360-towerPos_last;
 		}
-		stepper.newMoveDegreesCCW(towerWay);									// Command movemnt (relative! not absolute)
-		towerPos_last = towerPos;												// Store changed pos value
-		stepperActive = true;													// Set flag to make sure no other movement is commanded
+		if (settingClock > 0){					// Move only when selected in settings
+			stepper.newMoveDegreesCCW(towerWay);									// Command movemnt (relative! not absolute)
+			towerPos_last = towerPos;												// Store changed pos value
+			stepperActive = true;					// Set flag to make sure no other movement is commanded
+		}
 	}
 	
 }
