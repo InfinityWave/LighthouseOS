@@ -36,10 +36,10 @@
 #define BTN_R A0           //interrupt
 
 //LED pins
-#define LED_BTN_C 6        //TODO Button LED
-#define LED_BTN_R 6        //TODO Button LED
-#define LED_BTN_L 6        //TODO Button LED
-#define LED_MAIN 5         //TODO PWM pin
+#define LED_BTN_C 6        //Button LED
+#define LED_BTN_R 6        //Button LED
+#define LED_BTN_L 6        //Button LED
+#define LED_MAIN 5         //PWM pin
 #define ALARM_LIGHT_MAX 255
 
 // stepper pins
@@ -113,7 +113,7 @@ Date "11.09.2021":
 #define MENU_SEL_Y 133 //Selector Icon Y-Pos
 #define MENU_SEL_SIZE 5 //Selector Icon Size
 //SpecialMenuSettings
-#define MAINMENU_ITEMS 7    // number of menu entries
+#define MAINMENU_ITEMS 6    // number of menu entries
 #define MAINMENU_TXT_X 120
 //SpecialSubMenuSettings
 #define SUBMENU_MAX_ITEMS 8
@@ -167,7 +167,6 @@ State* S4 = machine.addState(&stateClockMenu);
 State* S5 = machine.addState(&stateAlarm1Menu);
 State* S6 = machine.addState(&stateAlarm2Menu);
 State* S7 = machine.addState(&stateSoundMenu);
-State* S8 = machine.addState(&stateLighthouseMenu);
 State* S11 = machine.addState(&stateCreditsMenu);
 
 State* S99 = machine.addState(&stateAlarmActive); // State for active alarm
@@ -210,7 +209,7 @@ volatile bool isrButtonL = false;
 volatile bool isrButtonR = false;
 
 // menu entries
-const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound", "Light", "Credits", "Back"};
+const char *mainMenuEntries[MAINMENU_ITEMS] = {"Clock", "Alarm 1", "Alarm 2", "Sound+Tower", "Credits", "Back"};
 const char *soundOptions[SOUND_ITEMS] = {"Off", "Bell", "Horn", "Wedding"};
 const char *alarmTimeOptions[ALARMTIME_ITEMS] = {"Off", "Once" ,"Every Day", "Mo-Fr", "Sa+So"}; // 0: Off, 1: Once, 2: Every day, 3: Weekdays, 4: Weekend
 const char *alarmOptions[ALARM_ITEMS] = {"Off", "Light+Sound", "Sound only", "Light only"};
@@ -310,7 +309,6 @@ void setup(void) {
     S2->addTransition(&openAlarm1Menu,S5);
     S2->addTransition(&openAlarm2Menu,S6);
     S2->addTransition(&openSoundMenu,S7);
-    S2->addTransition(&openLighthouseMenu,S8);
     S2->addTransition(&openCreditsMenu,S11);
 	S2->addTransition(&startAlarm,S99); // check and start alarm
     //S2->addTransition(&anyButtonPressed,S2);   //Must be last item
@@ -335,18 +333,12 @@ void setup(void) {
     S6->addTransition(&saveReturnToMainMenu,S2);
     S6->addTransition(&changeSubMenuSelection,S6);
 	S6->addTransition(&startAlarm,S99); // check and start alarm
-    //Sound Menu
+    //Sound + Tower Menu
     S7->addTransition(&returnToClockDisplay,S0); //After timeout
     S7->addTransition(&returnToMainMenu,S2);
     S7->addTransition(&saveReturnToMainMenu,S2);
     S7->addTransition(&changeSubMenuSelection,S7);
 	S7->addTransition(&startAlarm,S99); // check and start alarm
-    //Volume Menu
-    S8->addTransition(&returnToClockDisplay,S0); //After timeout
-    S8->addTransition(&returnToMainMenu,S2);
-    S8->addTransition(&saveReturnToMainMenu,S2);
-    S8->addTransition(&changeSubMenuSelection,S8);
-	S8->addTransition(&startAlarm,S99); // check and start alarm
     //Credits Menu
     S11->addTransition(&returnToClockDisplay,S0); //After timeout
 	S11->addTransition(&anyButtonPressed,S2);
@@ -459,6 +451,7 @@ void setup(void) {
     update_temperature();
     Serial1.begin(9600); //Hardware Serial for MP3
     myDFPlayer.begin(Serial1);
+	clearTFT();
 }
 
 void loop()
@@ -821,19 +814,6 @@ void stateSoundMenu(const char *menuOptions)
     //Set Volume 0 - 30
 }
 
-//S8
-void stateLighthouseMenu()
-{
-    if (updateScreen) {
-        updateScreen = false;
-        drawNotImplementedMessage();
-    }
-    //Lighthouse Settings for normal clock mode
-    //Motor Settings
-    //Main Light Settings
-}
-
-
 //S11
 void stateCreditsMenu()
 {
@@ -1050,25 +1030,6 @@ bool openSoundMenu()
     return false;
 }
 
-bool openLighthouseMenu()
-{
-    if (isrButtonC  && (selectedMMItem == 4)){
-        openSuBMenu();
-        return true;   
-    }
-    return false;
-}
-
-bool openBrigthnessMenu()
-{
-    if (isrButtonC  && (selectedMMItem == 5)){
-        openSuBMenu();
-        return true;   
-    }
-    return false;
-}
-
-
 // Credits (with tower light on)
 bool openCreditsMenu()
 {
@@ -1239,7 +1200,7 @@ void openSuBMenu()
 			submenu.maxVal[0] = VOLUME_MAX;
             break;
 
-        case 8:
+        case 4:
             //Credits
             submenu.num_items = 0;
     }
