@@ -638,6 +638,7 @@ void stateClockDisplay()
 {
     if (updateScreen) {
         //Serial.println("Entering ClockDisplay");
+        clearTFT();
         updateScreen = false;
         updateClockSign = true;
         drawClockDisplayInfo();
