@@ -809,6 +809,8 @@ void stateSoundMenu(const char *menuOptions)
         sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
         drawSubMenuEntryText(outString, 0);
 		drawSubMenuEntry(clockOptions, 1);
+        sprintf(outString, "LED %d%%", (100*submenu.item[0]/ALARM_LIGHT_MAX));
+        drawSubMenuEntryText(outString, 0);
         updateScreen = false;
         updateMenuSelection = false;
     }
@@ -1034,7 +1036,7 @@ bool openSoundMenu()
 // Credits (with tower light on)
 bool openCreditsMenu()
 {
-    if (isrButtonC  && (selectedMMItem == 7)){
+    if (isrButtonC  && (selectedMMItem == 4)){
         openSuBMenu();
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
@@ -1128,6 +1130,8 @@ bool saveReturnToMainMenu()
                 framwrite16bit(FRAM_VOLUME, settingVolume);
 				settingClock = submenu.item[1];
 				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
+                settingLEDBrightness = submenu.item[1];
+				framwrite16bit(FRAM_LED_BRIGHTNESS, settingLEDBrightness);
             case 8:
                 //Credits
                 submenu.num_items = 0;
@@ -1198,9 +1202,13 @@ void openSuBMenu()
             break;
 		case 3:
             //Sound
-            submenu.num_items = 1; 
+            submenu.num_items = 3; 
             submenu.item[0] = settingVolume;
 			submenu.maxVal[0] = VOLUME_MAX;
+            submenu.item[1] = settingClock;
+			submenu.maxVal[1] = CLOCK_ITEMS-1;
+            submenu.item[2] = settingLEDBrightness;
+			submenu.maxVal[2] = ALARM_LIGHT_MAX;
             break;
 
         case 4:
