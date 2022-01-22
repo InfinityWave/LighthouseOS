@@ -657,7 +657,7 @@ void stateClockDisplay()
       delay(50);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
 	  alarmLightOn = true; 						// Turn on light flag
-	  analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch tower light
+	  analogWrite(LED_MAIN, settingLEDBrightness);	// Switch tower light
 	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
@@ -698,7 +698,7 @@ void stateAlarmActive()
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, settingLEDBrightness * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -841,7 +841,7 @@ void stateCreditsMenu()
 	if (millis() - alarmLightTimer > alarmLightDelay) {
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX * alarmLightOn);	// Switch tower light
+		analogWrite(LED_MAIN, settingLEDBrightness * alarmLightOn);	// Switch tower light
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -969,7 +969,7 @@ bool startAlarm()
 			alarmTotalTimer = millis();				// Start timer for max alarm time
 			alarmLightTimer = millis();				// Start timer for light
 			alarmLightOn = true;					// Switch on tower light (flag)
-			analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+			analogWrite(LED_MAIN, settingLEDBrightness);	// Switch on tower light (real)
 		}
 		// Light + Sound OR Sound Only
 		if ((alm_towermode_actual == 1)||(alm_towermode_actual == 2)){
@@ -1041,7 +1041,7 @@ bool openCreditsMenu()
         openSuBMenu();
 		alarmLightTimer = millis();				// Start timer for light
 		alarmLightOn = true;					// Switch on tower light (flag)
-		analogWrite(LED_MAIN, ALARM_LIGHT_MAX);	// Switch on tower light (real)
+		analogWrite(LED_MAIN, settingLEDBrightness);	// Switch on tower light (real)
         return true;   
     }
     return false;
@@ -1350,7 +1350,7 @@ bool changeToWeddingMode()
         stepperActive = true;
         stepper.newMove(false, 36000);
         //Serial.println("Start Player");
-        analogWrite(LED_MAIN, ALARM_LIGHT_MAX);
+        analogWrite(LED_MAIN, settingLEDBrightness);
         analogWrite(LED_BTN_C, 255);
         myDFPlayer.volume(settingVolume);
         myDFPlayer.loop(1);
