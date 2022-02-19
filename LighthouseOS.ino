@@ -239,7 +239,7 @@ bool updateClockSign = false;
 bool changeValue = false;
 
 // Alarm variables
-uint32_t alarmLightDelay = 1000;	// Time for tower light on (ms)
+uint32_t alarmLightDelay = 5000;	// Time for tower light on (ms)
 uint32_t alarmLightTimer = 0;		// Tower light times
 bool alarmLightOn = false;			// If tower light is on
 time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
@@ -526,7 +526,7 @@ void loop()
 		// Is the stepper run finished (no stepps left)?
         if (stepperActive && stepper.getStepsLeft() == 0) {
             stepperActive = false;							// Not active any more
-            stepper.off();									// TODO: Check if the stepper is switched on in newMoveDegreesCCW
+            stepper.off();
         }
     }
 }
@@ -731,7 +731,7 @@ void stateMainMenu()
             canvasSmallFont.println(mainMenuEntries[(selectedMMItem+MAINMENU_ITEMS-1+i)%MAINMENU_ITEMS]);
             tft.drawBitmap(TFT_MARGIN_LEFT+MENU_ITEMS_X, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
             cursorY = cursorY + canvasSmallFont.height();
-        updateMenuSelection = false;
+			updateMenuSelection = false;
         }
     }
 	// Switch off tower light (if left on in other states like S11, Credits or S0)
@@ -745,13 +745,7 @@ void stateMainMenu()
 //S3
 void stateWeddingMode()
 {
-    // TODO
-    //Switch Music On
-    //Switch Motor On
-    //Switch Main Light On
-    //Blink auxiliary lights
-    //Display something
-    
+    // Nothing to do here
 }
 
 //S4
@@ -1694,7 +1688,7 @@ void update_temperature(){
 void updateTowerLight(time_t t){
 	uint16_t towerPos;
 	uint16_t towerWay;
-	towerPos = towerPosOffset + ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 15) * 3; 	// 360°/24h plus 3° per 1/4 h. Will change every 15min
+	towerPos = towerPosOffset + ( 15 * (uint16_t)hour(t)) + ((uint16_t)minute(t) / 4); 	// Move 1° every 4 min (==360° in 24h)
 	// Command new position if needed ...
 	if ((moveTower)&&(stepperActive==false)&&(towerPos_last!=towerPos)) {		// Set point changed AND nothing is running		
 		if (towerPos > towerPos_last){											// make sure the resulting way is positive
