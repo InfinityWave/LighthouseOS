@@ -18,6 +18,8 @@
 
 //DS3231 pins
 #define DS3231_INT 2      // interrupt
+#define REATTACH_DELAY 100 // interrupt reattach in ms
+
 
 //DCF77 pins
 #define DCF_PIN 3         // Connection pin to DCF 77 device, interrupt
@@ -658,7 +660,7 @@ void stateClockDisplay()
     }
 	if (isrButtonR) {							// Light button was pressed
       isrButtonR = false;						// Reset Btn-flag
-      delay(50);
+      delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
 	  alarmLightOn = true; 						// Turn on light flag
 	  analogWrite(LED_MAIN, settingLEDBrightness);	// Switch tower light
@@ -875,7 +877,7 @@ bool wakeup()
       //isrButtonL = false;
       sleepTimer = millis();
       isrTimeUpdate = true;
-      delay(50);
+      delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
@@ -893,7 +895,7 @@ bool openMainMenu()
       sleepTimer = millis();
       clearTFT();
       selectedMMItem = MAINMENU_ITEMS-1;
-      delay(50);
+      delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
       return true;
     }
@@ -907,7 +909,7 @@ bool changeMainMenuSelection()
         sleepTimer = millis();
         updateMenuSelection = true;
         selectedMMItem = (selectedMMItem+1)%MAINMENU_ITEMS;
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         return true;
     }
@@ -916,7 +918,7 @@ bool changeMainMenuSelection()
         sleepTimer = millis();
         updateMenuSelection = true;
         selectedMMItem = (selectedMMItem+MAINMENU_ITEMS-1)%MAINMENU_ITEMS;
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         return true;
     }
@@ -932,7 +934,7 @@ bool closeMainMenu()
           clearTFT();
           prepareClock();
           isrTimeChange = true; // to enable clock display
-          delay(50);
+          delay(REATTACH_DELAY);
           attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
           return true;
           }
@@ -947,7 +949,7 @@ bool stopAlarm()
 	if ((isrButtonL)||(millis()-alarmTotalTimer > alarmTotalDelay)) {
       isrButtonL = false;		// Reset Btn-flag
       isrTimeUpdate = true;		// ??
-      delay(50);
+      delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
 	  analogWrite(LED_MAIN, 0); 			// Switch off tower light
 	  alarmLightOn = false;					// Switch off tower light (flag)
@@ -1232,7 +1234,7 @@ void openSuBMenu()
     clearTFT();
     drawMenuTop(mainMenuEntries[selectedMMItem]);
     updateSubMenuCenterIcon();
-    delay(50);
+    delay(REATTACH_DELAY);
     attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
 }
 
@@ -1244,7 +1246,7 @@ bool changeSubMenuSelection()
         submenu.selectedItem = (submenu.selectedItem + 1) % (submenu.num_items+2);  
         updateScreen = true;
         updateSubMenuCenterIcon();
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         return true;
     }
@@ -1255,13 +1257,13 @@ bool changeSubMenuSelection()
         if (isrButtonL){
             isrButtonL = false;
             submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]-submenu.increment[submenu.selectedItem];
-            delay(50);
+            delay(REATTACH_DELAY);
             attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         }
         else {
             isrButtonR = false;
             submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]+submenu.increment[submenu.selectedItem];
-            delay(50);
+            delay(REATTACH_DELAY);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
         checkSubMenuItemValidity(submenu.selectedItem);
@@ -1387,19 +1389,19 @@ bool anyButtonPressed()
     bool buttonPressed = false;
     if(isrButtonR){
         isrButtonR = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         buttonPressed = true;
     }
     if(isrButtonL){
         isrButtonL = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         buttonPressed = true;
     }
     if(isrButtonC){
         isrButtonC = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
         buttonPressed = true;
     }
@@ -1414,17 +1416,17 @@ bool reAttachUnhandledInterrupts()
 {
     if(isrButtonR){
         isrButtonR = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
     }
     if(isrButtonL){
         isrButtonL = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
     }
     if(isrButtonC){
         isrButtonC = false;    
-        delay(50);
+        delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_C), buttonC, FALLING);
     }
     return true;
