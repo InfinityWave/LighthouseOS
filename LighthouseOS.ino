@@ -130,6 +130,7 @@ Date "11.09.2021":
 #define LITE_MIN 10 //max display brightness
 #define LITE_MAX 255 //max display brightness
 #define VOLUME_MAX 30 //max volume setting
+#define ALARMLIGHTDELAY_DEF 5000 // Default value alarmLightDelay
 
 #define DCF_INT 6     // interval of dcf sync in hours
 #define DCF_HOUR 0    // hour to start dcf sync
@@ -239,7 +240,7 @@ bool updateClockSign = false;
 bool changeValue = false;
 
 // Alarm variables
-uint32_t alarmLightDelay = 5000;	// Time for tower light on (ms)
+uint32_t alarmLightDelay = ALARMLIGHTDELAY_DEF;	// Time for tower light on (ms)
 uint32_t alarmLightTimer = 0;		// Tower light times
 bool alarmLightOn = false;			// If tower light is on
 time_t isrTime_last = 0;			// Stores time to check if a new alarm check is needed
@@ -706,6 +707,7 @@ void stateAlarmActive()
 		alarmLightTimer = millis();								// Restart timer
 		alarmLightOn = not alarmLightOn;						// Switch state of light
 		analogWrite(LED_MAIN, settingLEDBrightness * alarmLightOn);	// Switch tower light
+		alarmLightDelay = ALARMLIGHTDELAY_DEF/3 + alarmLightOn*2*ALARMLIGHTDELAY_DEF/3;
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
@@ -965,7 +967,7 @@ bool stopAlarm()
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
 	  myDFPlayer.stop();					// Stop MP3-Player
-
+	  alarmLightDelay = ALARMLIGHTDELAY_DEF;
       return true;
     }
     return false;
