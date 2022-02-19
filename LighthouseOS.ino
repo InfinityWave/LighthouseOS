@@ -837,8 +837,8 @@ void stateCreditsMenu()
         //tft.setFont();
         //tft.setTextSize(2);
         //tft.println(" ");
-        tft.setFont(&FreeSans12pt7b);
-        tft.setTextSize(1);
+        //tft.setFont(&FreeSans12pt7b);
+        //tft.setTextSize(1);
         tft.println("  Hans");
         tft.println("  Ben");
         set_default_font();
@@ -1055,9 +1055,6 @@ bool openCreditsMenu()
 
 void updateSubMenuCenterIcon()
 {
-    if (submenu.selectedItem==(submenu.num_items+1)){
-        drawMenuSetter(16);
-    }
     if (submenu.selectedItem==submenu.num_items){
         drawMenuSetter(8);
     }
@@ -1069,7 +1066,7 @@ void updateSubMenuCenterIcon()
 bool returnToMainMenu()
 {   
     //Return to main menu without saving
-    if ((isrButtonL || isrButtonR)  && (submenu.selectedItem == (submenu.num_items+1))){
+    if ((isrButtonL || isrButtonR)  && (submenu.selectedItem == (submenu.num_items))){
         sleepTimer = millis();
         clearTFT();
         reAttachUnhandledInterrupts();
@@ -1083,7 +1080,7 @@ bool returnToMainMenu()
 bool saveReturnToMainMenu()
 {   
     //Save and return to main menu, with center button and last item in menu
-    if ((isrButtonL || isrButtonR)  && (submenu.selectedItem == (submenu.num_items))){
+    if ((isrButtonC)  && (submenu.selectedItem == (submenu.num_items))){
         sleepTimer = millis();
         switch (selectedMMItem){
             case 0:
@@ -1139,14 +1136,12 @@ bool saveReturnToMainMenu()
                 framwrite16bit(FRAM_VOLUME, settingVolume);
 				settingClock = submenu.item[1];
 				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                settingLEDBrightness = submenu.item[1];
+                settingLEDBrightness = submenu.item[2];
 				framwrite16bit(FRAM_LED_BRIGHTNESS, settingLEDBrightness);
             case 8:
                 //Credits
                 submenu.num_items = 0;
                 break;
-
-
         }
         clearTFT();
         reAttachUnhandledInterrupts();
@@ -1219,9 +1214,7 @@ void openSuBMenu()
             submenu.item[2] = settingLEDBrightness;
 			submenu.maxVal[2] = ALARM_LIGHT_MAX;
             submenu.increment[2]=25;
-
             break;
-
         case 4:
             //Credits
             submenu.num_items = 0;
@@ -1230,7 +1223,7 @@ void openSuBMenu()
         checkSubMenuItemValidity(i);
     }
     // Begin with selection of last item, which should be save and exit
-    submenu.selectedItem = submenu.num_items+1;
+    submenu.selectedItem = 0;
     clearTFT();
     drawMenuTop(mainMenuEntries[selectedMMItem]);
     updateSubMenuCenterIcon();
@@ -1243,7 +1236,7 @@ bool changeSubMenuSelection()
     if (isrButtonC){
         isrButtonC = false;
         sleepTimer = millis();
-        submenu.selectedItem = (submenu.selectedItem + 1) % (submenu.num_items+2);  
+        submenu.selectedItem = (submenu.selectedItem) % (submenu.num_items+1);  
         updateScreen = true;
         updateSubMenuCenterIcon();
         delay(REATTACH_DELAY);
@@ -1584,19 +1577,13 @@ void drawMenuSetter(uint8_t isOn)
             tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, COLOR_TXT);
             tft.fillCircle(CENTER_ICON_X+TFT_MARGIN_LEFT, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE-CENTER_ICON_LW, COLOR_BKGND);
         }
+        
         // ToDo Ensure old Text is overwritten/blanked
-        if ((isOn & 8) || (isOn & 16)){
-                uint16_t tcolor; 
-            if (isOn & 8){
-                // Center Icon Save
-                sprintf(outString, "Save");
-                tcolor = COLOR_GREEN;
-            }
-            else {
-                // Center Icon Cancel
-                sprintf(outString, "Return");
-                tcolor = COLOR_RED;
-            }
+        if ((isOn & 8)){
+            uint16_t tcolor; 
+            // Center Icon Save
+            sprintf(outString, "Save");
+            tcolor = COLOR_GREEN;
             canvasSmallFont.getTextBounds(outString, 0, canvasSmallFont.height()-FONT_MARGIN-MENULINEWIDTH, &x1, &y1, &w1, &h1);
             cursorX = CENTER_ICON_X+TFT_MARGIN_LEFT - (uint8_t)((x1+w1)/2) - CANVAS_MENUL_X - CANVAS_MENULR_WIDTH;
             canvasSmallFont.fillScreen(COLOR_BKGND);
@@ -1605,6 +1592,7 @@ void drawMenuSetter(uint8_t isOn)
             canvasSmallFont.fillRect(x1+cursorX,canvasSmallFont.height()-FONT_MARGIN,w1,MENULINEWIDTH,tcolor);
             cursorY = CENTER_ICON_Y+TFT_MARGIN_TOP - (uint8_t)(canvasSmallFont.height()/2);
             tft.drawBitmap(TFT_MARGIN_LEFT+CANVAS_MENUL_X+CANVAS_MENULR_WIDTH, cursorY, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), tcolor, COLOR_BKGND);
+            tcolor = COLOR_RED;
             //Draw Circle Icons left and right
             tft.fillCircle(CANVAS_MENUL_X+TFT_MARGIN_LEFT+CANVAS_MENULR_ICONOFFSET, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, tcolor);
             tft.fillCircle(CANVAS_MENUR_X+TFT_MARGIN_LEFT+CANVAS_MENULR_ICONOFFSET, CENTER_ICON_Y+TFT_MARGIN_TOP, CENTER_ICON_SIZE, tcolor);
