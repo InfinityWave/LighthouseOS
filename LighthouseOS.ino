@@ -1236,7 +1236,7 @@ bool changeSubMenuSelection()
     if (isrButtonC){
         isrButtonC = false;
         sleepTimer = millis();
-        submenu.selectedItem = (submenu.selectedItem) % (submenu.num_items+1);  
+        submenu.selectedItem = (submenu.selectedItem+1) % (submenu.num_items+1);  
         updateScreen = true;
         updateSubMenuCenterIcon();
         delay(REATTACH_DELAY);
