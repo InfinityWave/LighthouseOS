@@ -1755,7 +1755,7 @@ bool checkAlarms () {
 bool checkAlarm (struct alarms &alm){
 	// Weekday:
 	// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
-	if (alm.mode > 0 && alm.nextAlarm >= isrTime){ // Alarm is triggered
+	if (alm.mode > 0 && alm.nextAlarm <= isrTime){ // Alarm is triggered
 		switch (alm.mode){
 			case 0: return false; break;				// Off: Not possible
 			case 1: alm.mode = 0; break; 				// Once: Switch off
