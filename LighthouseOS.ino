@@ -506,6 +506,8 @@ void loop()
             dcfSyncSucc = true;
             DCFSyncStatus = true;
             DCFSyncChanged = true;
+			recalcAlarm(alm1);
+			recalcAlarm(alm2);
             //Serial.print("Sync Success");
             //Serial.print(hour(isrTime));
             //Serial.print(":");
@@ -1102,6 +1104,8 @@ bool saveReturnToMainMenu()
                 DCFSyncStatus = false;
                 DCFSyncChanged = true;
                 updateClock();
+				recalcAlarm(alm1);
+				recalcAlarm(alm2);
                 break;
             case 1:
                 //Alarm 1 menu
