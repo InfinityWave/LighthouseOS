@@ -1212,6 +1212,8 @@ void openSuBMenu()
 			submenu.maxVal[1] = CLOCK_ITEMS-1;
             submenu.item[2] = settingLEDBrightness;
 			submenu.maxVal[2] = ALARM_LIGHT_MAX;
+            submenu.increment[2]=25;
+
             break;
 
         case 4:
