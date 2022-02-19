@@ -815,9 +815,22 @@ void stateSoundMenu(const char *menuOptions)
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
         drawSubMenuEntryText(outString, 0);
-		drawSubMenuEntry(clockOptions, 1);
+		if (submenu.item[submenu.selectedItem] == 0) {
+            myDFPlayer.volume(submenu.item[0]);
+            myDFPlayer.loop(1);
+        }
+        else {
+            myDFPlayer.stop();
+        }
+        drawSubMenuEntry(clockOptions, 1);
         sprintf(outString, "LED %d%%", (100*submenu.item[2]/ALARM_LIGHT_MAX));
         drawSubMenuEntryText(outString, 2);
+		if (submenu.item[submenu.selectedItem] == 2) {
+            analogWrite(LED_MAIN, submenu.item[2]);
+        }
+        else {
+            analogWrite(LED_MAIN, 0);
+        }
         updateScreen = false;
         updateMenuSelection = false;
     }
