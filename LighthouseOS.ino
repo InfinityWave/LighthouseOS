@@ -14,6 +14,8 @@
 //#include <Fonts/FreeSans18pt7b.h>
 #include "Adresses.h"  // FRAM Adresses
 
+
+
 //DS3231 pins
 #define DS3231_INT 2      // interrupt
 
@@ -810,8 +812,8 @@ void stateSoundMenu(const char *menuOptions)
         sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
         drawSubMenuEntryText(outString, 0);
 		drawSubMenuEntry(clockOptions, 1);
-        sprintf(outString, "LED %d%%", (100*submenu.item[0]/ALARM_LIGHT_MAX));
-        drawSubMenuEntryText(outString, 0);
+        sprintf(outString, "LED %d%%", (100*submenu.item[2]/ALARM_LIGHT_MAX));
+        drawSubMenuEntryText(outString, 2);
         updateScreen = false;
         updateMenuSelection = false;
     }
