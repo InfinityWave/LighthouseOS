@@ -402,21 +402,17 @@ void setup(void) {
 
     // initialize FRAM
     if (fram.begin()){// you can stick the new i2c addr in here, e.g. begin(0x51);
-        Serial.println("Found FRAM");
+        //Serial.println("Found FRAM");
         framAvailable = true;
     }
     else{
-        Serial.println("FRAM error");
+        //Serial.println("FRAM error");
         framAvailable = false;
     }
 
     // Read settings from FRAM
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
-    Serial.println("VOL");
-Serial.println(framread16bit(FRAM_VOLUME));
     settingVolume = framread16bit(FRAM_VOLUME);
-    
-    Serial.println(settingVolume);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
     settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
     // Override 0 Display brightness
@@ -695,6 +691,7 @@ void stateStandby()
 // S99 = Active alarm
 void stateAlarmActive()
 {
+    //Serial.println("ALAAARM!!!");
 	// Continue showing the clock
 	if (isrTimeUpdate) {
         isrTimeUpdate = false;
@@ -1145,9 +1142,6 @@ bool saveReturnToMainMenu()
                 //Sound Menu
                 settingVolume = submenu.item[0];
                 framwrite16bit(FRAM_VOLUME, settingVolume);
-                Serial.println("WriteVol");
-                Serial.println(settingVolume);
-                Serial.println(framread16bit(FRAM_VOLUME));
 				settingClock = submenu.item[1];
 				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
                 settingLEDBrightness = (uint16_t)(submenu.item[2]*ALARM_LIGHT_MAX/100);
@@ -1167,7 +1161,6 @@ bool saveReturnToMainMenu()
 
 void openSuBMenu()
 {
-    Serial.println("OpenSMenu");
     sleepTimer = millis();
     isrButtonC = false;
     // Init
@@ -1360,9 +1353,9 @@ bool changeToWeddingMode()
 {
     if(isrButtonL){
         isrButtonL = false;    
-        delay(100);
-        attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
-        //Serial.println("Entering WeddingMode");
+        delay(REATTACH_DELAY);
+        attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
+        Serial.println("Entering WeddingMode");
         stepper.setRpm(STEP_RPM_FAST);
         moveTower = true;
         stepperActive = true;
@@ -1380,7 +1373,7 @@ bool exitWeddingMode()
 {
     bool button_pressed = anyButtonPressed();
     if(button_pressed){
-        //Serial.println("Exit WeddingMode");
+        Serial.println("Exit WeddingMode");
         stepper.setRpm(STEP_RPM);
         analogWrite(LED_BTN_C, 0);
         myDFPlayer.stop();
@@ -1760,7 +1753,9 @@ bool checkAlarms () {
 bool checkAlarm (struct alarms &alm){
 	// Weekday:
 	// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
-	if (alm.mode > 0 && alm.nextAlarm <= isrTime){ // Alarm is triggered
+	Serial.println(isrTime);
+    Serial.println(alm.nextAlarm);
+    if (alm.mode > 0 && alm.nextAlarm <= isrTime){ // Alarm is triggered
 		switch (alm.mode){
 			case 0: return false; break;				// Off: Not possible
 			case 1: alm.mode = 0; break; 				// Once: Switch off
@@ -1789,14 +1784,17 @@ bool checkAlarm (struct alarms &alm){
 
 // Recalculate nextAlarm, e.g. after reading from FRAM or setting a new alarm in the menu
 void recalcAlarm(struct alarms &alm){
-	
+	Serial.println("Recalc");
 	// 1st: Set alarm for today
 	tmElements_t myElements = {0, alm.mm, alm.hh, weekday(isrTime), day(isrTime), month(isrTime), year(isrTime)-1970 };
 	alm.nextAlarm = makeTime(myElements);
+    Serial.println(isrTime);
+    Serial.println(alm.nextAlarm);
 	// 2nd: Check Alarm is in the past or not allowed today
-	if (alm.mode<=2){ 						// Not related to weekdays
-		if (alm.nextAlarm < isrTime){		// If alarm is in the past...
-			alm.nextAlarm += 60*60*24;		// ... add 24h
+	//while (alm.nextAlarm < isrTime){
+    if (alm.mode<=2){ 						// Not related to weekdays
+		if (alm.nextAlarm <= isrTime){		// If alarm is in the past...
+			alm.nextAlarm += (time_t)86400;		    // ... add 24h
 		}
 	}else{									// Alarm is related to weekdays
 		// Weekday:
@@ -1804,97 +1802,92 @@ void recalcAlarm(struct alarms &alm){
 		switch (weekday(isrTime)){ 			// Check today:
 			case 0: 						// Sunday
 				if (alm.mode==3){			// Next weekday is Monday => add 24h
-					alm.nextAlarm += 60*60*24;
+					alm.nextAlarm += (time_t)86400;
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on Sa...
-						alm.nextAlarm += 60*60*24 * 6; // Add 6 days
+					if (alm.nextAlarm <= isrTime){ // if in the past, next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400 * 6; // Add 6 days
 					}
 				}
 			break;
 			case 1: 						// Monday
 				if (alm.mode==3){			// Weekday-alarm
-					if (alm.nextAlarm < isrTime){ // if in the past ... 
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <0 isrTime){ // if in the past ... 
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
-						alm.nextAlarm += 60*60*24 * 5; // Add 5 days
+					if (alm.nextAlarm <= isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400 * 5; // Add 5 days
 					}
 				}
 			break;
 			case 2: 						// Tuesday
 				if (alm.mode==3){			// Weekday-alarm
-					if (alm.nextAlarm < isrTime){ // if in the past ... 
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <= isrTime){ // if in the past ... 
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
-						alm.nextAlarm += 60*60*24 * 4; // Add 4 days
+					if (alm.nextAlarm <= isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400 * 4; // Add 4 days
 					}
 				}
 			break;
 			case 3: 						// Wednesday
 				if (alm.mode==3){			// Weekday-alarm
-					if (alm.nextAlarm < isrTime){ // if in the past ... 
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <= isrTime){ // if in the past ... 
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
-						alm.nextAlarm += 60*60*24 * 3; // Add 3 days
+					if (alm.nextAlarm <= isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400 * 3; // Add 3 days
 					}
 				}
 			break;
 			case 4: 						// Thurday
 				if (alm.mode==3){			// Weekday-alarm
-					if (alm.nextAlarm < isrTime){ // if in the past ... 
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <= isrTime){ // if in the past ... 
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
-						alm.nextAlarm += 60*60*24 * 2; // Add 2 days
+					if (alm.nextAlarm <= isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400 * 2; // Add 2 days
 					}
 				}
 			break;
 			case 5: 						// Friday
 				if (alm.mode==3){			// Weekday-alarm
-					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on Mo 
-						alm.nextAlarm += 60*60*24 * 3; // Add 3 days
+					if (alm.nextAlarm <= isrTime){ // if in the past, next alarm is on Mo 
+						alm.nextAlarm += (time_t)86400 * 3; // Add 3 days
 					}
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // Next alarm is on Sa...
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <= isrTime){ // Next alarm is on Sa...
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}
 			break;
 			case 6: 						// Saturday
 				if (alm.mode==3){			// Next weekday is Monday => add 2 days
-					alm.nextAlarm += 60*60*24 *2;
+					alm.nextAlarm += (time_t)86400 *2;
 				}else if (alm.mode==4){		// Weekend-alarm...
-					if (alm.nextAlarm < isrTime){ // if in the past, next alarm is on So...
-						alm.nextAlarm += 60*60*24; // Add 1 days
+					if (alm.nextAlarm <= isrTime){ // if in the past, next alarm is on So...
+						alm.nextAlarm += (time_t)86400; // Add 1 days
 					}
 				}
 			break;
 		}
 	}
-
+    //Serial.println(alm.nextAlarm);
+    //Serial.println("Fin");
 }
 //FRAM functions
 //////////////////////////////////////////////////////
 
 void writeAlarms (uint16_t address, struct alarms alm)
 {
-    Serial.println(address);
-    Serial.println(alm.hh);
-    Serial.println(framread8bit(address));
     framwrite8bit(address, alm.hh);
     framwrite8bit(address+1, alm.mm);
     framwrite8bit(address+2, alm.towermode);
     framwrite8bit(address+3, alm.soundfile);
 	framwrite8bit(address+4, alm.mode);
-    Serial.println(address+4);
-    Serial.println(alm.mode);
-    Serial.println(framread8bit(address+4));
 }
 
 
@@ -1921,7 +1914,6 @@ uint8_t framread8bit (uint16_t address){
     if (framAvailable){
         fram.read(address, &data, 1);
     }
-    Serial.println(data);
     return data;
 }
 
@@ -1938,7 +1930,6 @@ uint16_t framread16bit (uint16_t address)
     if (framAvailable){
         fram.read(address, (uint8_t*)&data, 2);
     }
-    Serial.println(data);
     return data;
 }
 
