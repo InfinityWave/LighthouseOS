@@ -286,7 +286,7 @@ struct menuStruct {
 bool weddingModeFinished = false;
 
 void setup(void) {
-    //Serial.begin(9600);
+    Serial.begin(9600);
    
     //stepper setup
     stepper.setRpm(STEP_RPM);
@@ -402,17 +402,21 @@ void setup(void) {
 
     // initialize FRAM
     if (fram.begin()){// you can stick the new i2c addr in here, e.g. begin(0x51);
-        //Serial.println("Found FRAM");
+        Serial.println("Found FRAM");
         framAvailable = true;
     }
     else{
-        //Serial.println("FRAM error");
+        Serial.println("FRAM error");
         framAvailable = false;
     }
 
     // Read settings from FRAM
     settingClock = framread16bit(FRAM_CLOCK_SETTINGS); 
+    Serial.println("VOL");
+Serial.println(framread16bit(FRAM_VOLUME));
     settingVolume = framread16bit(FRAM_VOLUME);
+    
+    Serial.println(settingVolume);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
     settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
     // Override 0 Display brightness
@@ -1141,6 +1145,9 @@ bool saveReturnToMainMenu()
                 //Sound Menu
                 settingVolume = submenu.item[0];
                 framwrite16bit(FRAM_VOLUME, settingVolume);
+                Serial.println("WriteVol");
+                Serial.println(settingVolume);
+                Serial.println(framread16bit(FRAM_VOLUME));
 				settingClock = submenu.item[1];
 				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
                 settingLEDBrightness = (uint16_t)(submenu.item[2]*ALARM_LIGHT_MAX/100);
@@ -1160,6 +1167,7 @@ bool saveReturnToMainMenu()
 
 void openSuBMenu()
 {
+    Serial.println("OpenSMenu");
     sleepTimer = millis();
     isrButtonC = false;
     // Init
@@ -1218,8 +1226,8 @@ void openSuBMenu()
 			submenu.maxVal[0] = VOLUME_MAX;
             submenu.item[1] = settingClock;
 			submenu.maxVal[1] = CLOCK_ITEMS-1;
-            submenu.item[2] = (uint16_t)(settingLEDBrightness/ALARM_LIGHT_MAX*100);
-			submenu.maxVal[2] = 100;
+            submenu.item[2] = (uint16_t)(settingLEDBrightness*100/ALARM_LIGHT_MAX);
+            submenu.maxVal[2] = 100;
             submenu.increment[2]=5;
             break;
         case 4:
@@ -1876,11 +1884,17 @@ void recalcAlarm(struct alarms &alm){
 
 void writeAlarms (uint16_t address, struct alarms alm)
 {
+    Serial.println(address);
+    Serial.println(alm.hh);
+    Serial.println(framread8bit(address));
     framwrite8bit(address, alm.hh);
     framwrite8bit(address+1, alm.mm);
     framwrite8bit(address+2, alm.towermode);
     framwrite8bit(address+3, alm.soundfile);
 	framwrite8bit(address+4, alm.mode);
+    Serial.println(address+4);
+    Serial.println(alm.mode);
+    Serial.println(framread8bit(address+4));
 }
 
 
@@ -1905,8 +1919,9 @@ void framwrite8bit (uint16_t address, uint8_t data)
 uint8_t framread8bit (uint16_t address){
     uint8_t data = 0;
     if (framAvailable){
-        fram.read(address);
+        fram.read(address, &data, 1);
     }
+    Serial.println(data);
     return data;
 }
 
@@ -1923,6 +1938,7 @@ uint16_t framread16bit (uint16_t address)
     if (framAvailable){
         fram.read(address, (uint8_t*)&data, 2);
     }
+    Serial.println(data);
     return data;
 }
 
