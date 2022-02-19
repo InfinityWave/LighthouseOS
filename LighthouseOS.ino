@@ -809,17 +809,17 @@ void stateSoundMenu(const char *menuOptions)
         cursorX = CLOCKDISPLAY_CLOCK_X+TFT_MARGIN_LEFT;
         sprintf(outString, "Volume %d%%", (100*submenu.item[0]/VOLUME_MAX));
         drawSubMenuEntryText(outString, 0);
-		if (submenu.item[submenu.selectedItem] == 0) {
+		if (submenu.selectedItem == 0) {
             myDFPlayer.volume(submenu.item[0]);
-            myDFPlayer.loop(1);
+            myDFPlayer.loop(0);
         }
         else {
             myDFPlayer.stop();
         }
         drawSubMenuEntry(clockOptions, 1);
-        sprintf(outString, "LED %d%%", (100*submenu.item[2]/ALARM_LIGHT_MAX));
+        sprintf(outString, "LED %d%%", (submenu.item[2]));
         drawSubMenuEntryText(outString, 2);
-		if (submenu.item[submenu.selectedItem] == 2) {
+		if (submenu.selectedItem == 2) {
             analogWrite(LED_MAIN, submenu.item[2]);
         }
         else {
@@ -1143,7 +1143,7 @@ bool saveReturnToMainMenu()
                 framwrite16bit(FRAM_VOLUME, settingVolume);
 				settingClock = submenu.item[1];
 				framwrite16bit(FRAM_CLOCK_SETTINGS, settingClock);
-                settingLEDBrightness = submenu.item[2];
+                settingLEDBrightness = (uint16_t)(submenu.item[2]*ALARM_LIGHT_MAX/100);
 				framwrite16bit(FRAM_LED_BRIGHTNESS, settingLEDBrightness);
             case 8:
                 //Credits
@@ -1218,9 +1218,9 @@ void openSuBMenu()
 			submenu.maxVal[0] = VOLUME_MAX;
             submenu.item[1] = settingClock;
 			submenu.maxVal[1] = CLOCK_ITEMS-1;
-            submenu.item[2] = settingLEDBrightness;
-			submenu.maxVal[2] = ALARM_LIGHT_MAX;
-            submenu.increment[2]=25;
+            submenu.item[2] = (uint16_t)(settingLEDBrightness/ALARM_LIGHT_MAX*100);
+			submenu.maxVal[2] = 100;
+            submenu.increment[2]=5;
             break;
         case 4:
             //Credits
