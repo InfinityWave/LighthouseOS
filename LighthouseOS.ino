@@ -84,8 +84,8 @@ Date "11.09.2021":
 // Margins due to the surrounding wooden box. TODO Edit for final setup
 #define TFT_MARGIN_LEFT 5
 #define TFT_MARGIN_RIGHT 30
-#define TFT_MARGIN_TOP 7 
-#define TFT_MARGIN_BOT 25
+#define TFT_MARGIN_TOP 20 
+#define TFT_MARGIN_BOT 20
 // Canvas Settings for Left and Right Menu Icons
 #define CANVAS_MENULR_WIDTH 45
 #define CANVAS_MENULR_HEIGHT 25
@@ -94,7 +94,7 @@ Date "11.09.2021":
 #define CANVAS_MENUL_X 5 //Left Setter Icon X-POS
 #define CANVAS_MENUL_Y 5 //Left Setter Icon Y-POS
 #define CANVAS_MENUR_X 235 //Right Setter Icon X-POS
-#define CANVAS_MENUR_Y 0 //Left Setter Icon Y-POS
+#define CANVAS_MENUR_Y 5 //Left Setter Icon Y-POS
 #define CENTER_ICON_X 135 //Center Icon X-POS
 #define CENTER_ICON_Y 13  //Center Icon Y-POS
 #define CENTER_ICON_SIZE 12 //Center icon Size
@@ -647,11 +647,12 @@ void drawMenuTop(char *menuName)
 void stateClockDisplay()
 {
     if (updateScreen) {
-        //Serial.println("Entering ClockDisplay");
+        Serial.println("Entering ClockDisplay");
         clearTFT();
         updateScreen = false;
         updateClockSign = true;
         drawClockDisplayInfo();
+        currentMenuSetter = 0;
         drawMenuSetter(1+4);
         tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
     }
@@ -667,12 +668,21 @@ void stateClockDisplay()
       delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
 	  alarmLightOn = true; 						// Turn on light flag
-	  analogWrite(LED_MAIN, settingLEDBrightness);	// Switch tower light
+	  myDFPlayer.volume(0);
+      analogWrite(LED_MAIN, settingLEDBrightness);	// Switch tower light
 	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
     }
+
+	if (isrButtonC|isrButtonL) {				// Switch Button light if any button pressed
+	  digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
+	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
+	  alarmLightTimer = millis();				// (Re-)Start timer
+    }
+
 	if (millis() - alarmLightTimer > alarmLightDelay){ // Time is up...
 		alarmLightOn = false; 						// Turn on light flag
 		analogWrite(LED_MAIN, 0);					// Switch tower light
@@ -820,7 +830,9 @@ void stateSoundMenu(const char *menuOptions)
             myDFPlayer.loop(0);
         }
         else {
-            myDFPlayer.stop();
+            //myDFPlayer.volume(0);
+            //myDFPlayer.stop();
+            myDFPlayer.reset() //to avoid noise
         }
         drawSubMenuEntry(clockOptions, 1);
         sprintf(outString, "LED %d%%", (submenu.item[2]));
@@ -968,8 +980,10 @@ bool stopAlarm()
 	  digitalWrite(LED_BTN_C, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_R, LOW);			// Switch btn LEDs off
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
-	  myDFPlayer.stop();					// Stop MP3-Player
-	  alarmLightDelay = ALARMLIGHTDELAY_DEF;
+	  //myDFPlayer.stop();					// Stop MP3-Player
+	  //myDFPlayer.volume(0);
+      myDFPlayer.reset()
+      alarmLightDelay = ALARMLIGHTDELAY_DEF;
       return true;
     }
     return false;
@@ -1378,13 +1392,21 @@ bool exitWeddingMode()
     bool button_pressed = anyButtonPressed();
     if(button_pressed){
         Serial.println("Exit WeddingMode");
+        myDFPlayer.reset();
+        //myDFPlayer.stop();
+
         stepper.setRpm(STEP_RPM);
         analogWrite(LED_BTN_C, 0);
-        myDFPlayer.stop();
+        
         moveTower = false;
         stepperActive = false;
         //stepper.newMoveDegreesCCW(360);
         analogWrite(LED_MAIN, 0);
+        isrTimeChange = true;
+        updateScreen = true;
+        prepareClock();
+        
+        
     }
    return button_pressed;
 }
