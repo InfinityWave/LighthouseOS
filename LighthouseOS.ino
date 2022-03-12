@@ -293,7 +293,7 @@ void setup(void) {
     stepper.setRpm(STEP_RPM);
 
     // DCF setup
-    digitalWrite(DCF_EN_PIN, HIGH);
+    digitalWrite(DCF_EN_PIN, LOW);
     pinMode(DCF_EN_PIN, OUTPUT);
 
     // setup state machine
@@ -481,7 +481,7 @@ void loop()
         // Time from DCF
         if (!dcfSync && hour(isrTime)%DCF_INT == DCF_HOUR && minute(isrTime) == DCF_MIN) {
             DCF.Start();
-            digitalWrite(DCF_EN_PIN, LOW);
+            digitalWrite(DCF_EN_PIN, HIGH);
             dcfSync = true;
             dcfSyncStart = isrTime;
             //Serial.print("DCFSync start: ");
@@ -491,7 +491,7 @@ void loop()
         }
         if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
             DCF.Stop();
-            digitalWrite(DCF_EN_PIN, HIGH);
+            digitalWrite(DCF_EN_PIN, LOW);
             dcfSync = false;
             dcfSyncSucc = false;
             DCFSyncStatus = false;
@@ -504,7 +504,7 @@ void loop()
                 myRTC.set(DCF.getTime());
             }
             updateClock();
-            digitalWrite(DCF_EN_PIN, HIGH);
+            digitalWrite(DCF_EN_PIN, LOW);
             dcfSync = false;
             dcfSyncSucc = true;
             DCFSyncStatus = true;
