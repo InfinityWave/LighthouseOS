@@ -430,7 +430,10 @@ void setup(void) {
     // setup tower LED
     pinMode(LED_MAIN, OUTPUT);
     analogWrite(LED_MAIN, 0);		
-
+    
+    // setup btn LED
+    pinMode(LED_BTN_C, OUTPUT);
+    digitalWrite(LED_BTN_L, LOW);
 
 	// Read stored alarms from FRAM
 	///////////////////////////////////
