@@ -832,7 +832,7 @@ void stateSoundMenu(const char *menuOptions)
         else {
             //myDFPlayer.volume(0);
             //myDFPlayer.stop();
-            myDFPlayer.reset() //to avoid noise
+            myDFPlayer.reset(); //to avoid noise
         }
         drawSubMenuEntry(clockOptions, 1);
         sprintf(outString, "LED %d%%", (submenu.item[2]));
@@ -982,7 +982,7 @@ bool stopAlarm()
 	  digitalWrite(LED_BTN_L, LOW);			// Switch btn LEDs off
 	  //myDFPlayer.stop();					// Stop MP3-Player
 	  //myDFPlayer.volume(0);
-      myDFPlayer.reset()
+      myDFPlayer.reset();
       alarmLightDelay = ALARMLIGHTDELAY_DEF;
       return true;
     }
