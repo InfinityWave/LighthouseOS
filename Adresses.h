@@ -7,3 +7,4 @@
 #define FRAM_LED_BRIGHTNESS 0x0140 // Setting for LED brightness
 #define FRAM_DISPLAY_BRIGHTNESS 0x0150 //Setting for display brightness
 #define FRAM_DCF_ENABLE 0x0160 //Setting for display brightness
+#define FRAM_TOWER_POS 0x0170 //Save last position of tower 

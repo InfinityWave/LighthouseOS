@@ -346,7 +346,7 @@ void setup(void) {
 	S7->addTransition(&startAlarm,S99); // check and start alarm
     //Credits Menu
     S11->addTransition(&returnToClockDisplay,S0); //After timeout
-	S11->addTransition(&anyButtonPressed,S2);
+	S11->addTransition(&exitMenu,S2);
 	S11->addTransition(&startAlarm,S99); // check and start alarm
 
 	// Stop alarm and return to clock
@@ -416,6 +416,8 @@ void setup(void) {
     settingVolume = framread16bit(FRAM_VOLUME);
     settingLEDBrightness = framread16bit(FRAM_LED_BRIGHTNESS);
     settingDisplayBrightness = framread16bit(FRAM_DISPLAY_BRIGHTNESS);
+
+    towerPos_last = framread16bit(FRAM_TOWER_POS);
     // Override 0 Display brightness
     if (! settingDisplayBrightness){
         settingDisplayBrightness = LITE_MAX;
@@ -531,6 +533,7 @@ void loop()
         if (stepperActive && stepper.getStepsLeft() == 0) {
             stepperActive = false;							// Not active any more
             stepper.off();
+            stepper.setRpm(STEP_RPM);
         }
     }
 }
@@ -761,7 +764,24 @@ void stateMainMenu()
 //S3
 void stateWeddingMode()
 {
-    // Nothing to do here
+    if (updateScreen) {
+        updateScreen = false; 
+        tft.fillScreen(COLOR_BKGND);
+        tft.setFont(&FreeSans12pt7b);
+        tft.setTextSize(1);
+        tft.setCursor(0, 100);
+        tft.println("  Frauke");
+        tft.println("  Christian");
+        tft.println("  Hans");
+        tft.println("  Ben");
+        set_default_font();
+    }    
+    if (!stepper.getStepsLeft()){
+        //moveTower = true;
+        stepperActive = true;
+        stepper.setRpm(STEP_RPM_FAST);
+        stepper.newMoveDegreesCCW(360);
+    }
 }
 
 //S4
@@ -859,11 +879,6 @@ void stateCreditsMenu()
         tft.setCursor(0, cursorYMenuStart+FONTSIZE_SMALL_HEIGHT);
         tft.println("  Frauke");
         tft.println("  Christian");
-        //tft.setFont();
-        //tft.setTextSize(2);
-        //tft.println(" ");
-        //tft.setFont(&FreeSans12pt7b);
-        //tft.setTextSize(1);
         tft.println("  Hans");
         tft.println("  Ben");
         set_default_font();
@@ -876,7 +891,8 @@ void stateCreditsMenu()
 	}
 	// Move the tower in full revs
 	if (stepperActive == false){								// Only command a new movemoent if nothing is running
-		stepperActive	= true;									// Set flag to make sure no other movement is commanded
+		stepperActive	= true;		
+        stepper.setRpm(STEP_RPM_FAST);							// Set flag to make sure no other movement is commanded
 		stepper.newMoveDegreesCCW(360);							// Command one full rev
 	}
 }
@@ -1374,17 +1390,17 @@ bool changeToWeddingMode()
         delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         Serial.println("Entering WeddingMode");
-        stepper.setRpm(STEP_RPM_FAST);
-        moveTower = true;
-        stepperActive = true;
-        stepper.newMove(false, 36000);
+        //stepper.setRpm(STEP_RPM_FAST);
+        //stepper.newMove(false, 36000);
         //Serial.println("Start Player");
         analogWrite(LED_MAIN, settingLEDBrightness);
         analogWrite(LED_BTN_C, 255);
         myDFPlayer.volume(settingVolume);
         myDFPlayer.loop(1);
+        updateScreen = true;
         return true;
     }
+    
 }
 
 bool exitWeddingMode()
@@ -1392,14 +1408,17 @@ bool exitWeddingMode()
     bool button_pressed = anyButtonPressed();
     if(button_pressed){
         Serial.println("Exit WeddingMode");
-        myDFPlayer.reset();
+        //myDFPlayer.reset();
         //myDFPlayer.stop();
-
-        stepper.setRpm(STEP_RPM);
-        analogWrite(LED_BTN_C, 0);
-        
-        moveTower = false;
-        stepperActive = false;
+        //while (stepper.getStepsLeft()){
+        //    stepper.run();
+        //}
+        //Serial.println("Stop");
+        myDFPlayer.reset();
+        //stepper.setRpm(STEP_RPM);
+        analogWrite(LED_BTN_C, 0); 
+        //moveTower = false;
+        //stepperActive = false;
         //stepper.newMoveDegreesCCW(360);
         analogWrite(LED_MAIN, 0);
         isrTimeChange = true;
@@ -1409,6 +1428,15 @@ bool exitWeddingMode()
         
     }
    return button_pressed;
+}
+
+bool exitMenu()
+{
+    if (anyButtonPressed()){
+        clearTFT();
+        return true;
+    }
+    return false;
 }
 
 bool anyButtonPressed()
@@ -1434,7 +1462,6 @@ bool anyButtonPressed()
     }
     if (buttonPressed){
         sleepTimer = millis();
-        clearTFT();
     }
     return buttonPressed;
 }
@@ -1726,6 +1753,7 @@ void updateTowerLight(time_t t){
 		if (settingClock > 0){					// Move only when selected in settings
 			stepper.newMoveDegreesCCW(towerWay);									// Command movemnt (relative! not absolute)
 			towerPos_last = towerPos;												// Store changed pos value
+            framwrite16bit(FRAM_TOWER_POS, towerPos_last);
 			stepperActive = true;					// Set flag to make sure no other movement is commanded
 		}
 	}
