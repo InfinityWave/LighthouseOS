@@ -881,10 +881,9 @@ bool toSleep()
 bool wakeup()
 {
     if (isrButtonC||isrButtonR||isrButtonL) {
-      // Following section uncommented to save pressed buttons after WakeUP
-      //isrButtonC = false;
-      //isrButtonR = false;
-      //isrButtonL = false;
+      isrButtonC = false;
+      isrButtonR = false;
+      isrButtonL = false;
       sleepTimer = millis();
       isrTimeUpdate = true;
       delay(REATTACH_DELAY);
