@@ -135,7 +135,7 @@ Date "11.09.2021":
 #define DCF_INT 6     // interval of dcf sync in hours
 #define DCF_HOUR 0    // hour to start dcf sync
 #define DCF_MIN 0     // minute to start dcf sync
-#define DCF_LEN 3600    // length in seconds of dcf sync attempt
+#define DCF_LEN 3600*6    // length in seconds of dcf sync attempt
 
 #define STEP_RPM 1
 #define STEP_RPM_FAST 10
@@ -350,7 +350,7 @@ void setup(void) {
 	S11->addTransition(&startAlarm,S99); // check and start alarm
 
 	// Stop alarm and return to clock
-	S99->addTransition(&stopAlarm,S2);
+	S99->addTransition(&stopAlarm,S0);
 	S99->addTransition(&reAttachUnhandledInterrupts,S99);
 	
     // TFT setup
@@ -461,7 +461,13 @@ void setup(void) {
     update_temperature();
     Serial1.begin(9600); //Hardware Serial for MP3
     myDFPlayer.begin(Serial1);
-	clearTFT();
+    // Start DCF Sync at beginning
+    DCF.Start();
+    digitalWrite(DCF_EN_PIN, HIGH);
+    dcfSync = true;
+    DCFSyncChanged = true;
+    dcfSyncStart = isrTime;
+    clearTFT();
 }
 
 void loop()
@@ -495,9 +501,9 @@ void loop()
             //Serial.println(minute(isrTime));
         }
         if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
-            DCF.Stop();
-            digitalWrite(DCF_EN_PIN, LOW);
-            dcfSync = false;
+            //DCF.Stop();
+            //digitalWrite(DCF_EN_PIN, LOW);
+            //dcfSync = false;
             dcfSyncSucc = false;
             DCFSyncStatus = false;
             DCFSyncChanged = true;
@@ -559,11 +565,14 @@ void drawClockDisplayInfo(){
     canvasSmallFont.print("LighthouseOS");
     tft.drawBitmap(CLOCKDISPLAY_LH_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
 
+    canvasSmallFont.fillScreen(COLOR_BKGND);
+    canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
+    canvasSmallFont.print("DCF");
     if (DCFSyncStatus){
-        canvasSmallFont.fillScreen(COLOR_BKGND);
-        canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
-        canvasSmallFont.print("DCF");
         tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_TXT, COLOR_BKGND);
+    }
+    else {
+         tft.drawBitmap(CLOCKDISPLAY_SYNC_X+TFT_MARGIN_LEFT, ypos, canvasSmallFont.getBuffer(), canvasSmallFont.width(), canvasSmallFont.height(), COLOR_RED, COLOR_BKGND); 
     }
     canvasSmallFont.fillScreen(COLOR_BKGND);
     canvasSmallFont.setCursor(0, FONTSIZE_SMALL_HEIGHT+FONT_MARGIN);
@@ -651,13 +660,7 @@ void stateClockDisplay()
 {
     if (updateScreen) {
         Serial.println("Entering ClockDisplay");
-        clearTFT();
-        updateScreen = false;
-        updateClockSign = true;
-        drawClockDisplayInfo();
-        currentMenuSetter = 0;
-        drawMenuSetter(1+4);
-        tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+        drawClockOnTFT();
     }
     if (isrTimeUpdate) {
         isrTimeUpdate = false;
@@ -677,6 +680,7 @@ void stateClockDisplay()
 	  digitalWrite(LED_BTN_R, HIGH);			// Switch btn LEDs on
 	  digitalWrite(LED_BTN_L, HIGH);			// Switch btn LEDs on
 	  alarmLightTimer = millis();				// (Re-)Start timer
+      sleepTimer = millis();
     }
 
 	if (isrButtonC|isrButtonL) {				// Switch Button light if any button pressed
@@ -989,6 +993,7 @@ bool stopAlarm()
 	if ((isrButtonL)||(millis()-alarmTotalTimer > alarmTotalDelay)) {
       isrButtonL = false;		// Reset Btn-flag
       isrTimeUpdate = true;		// ??
+      sleepTimer = millis();
       delay(REATTACH_DELAY);
       attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
 	  analogWrite(LED_MAIN, 0); 			// Switch off tower light
@@ -1009,6 +1014,11 @@ bool stopAlarm()
 bool startAlarm()
 {
 	if (checkAlarms()) {
+        // Reset clock to force redraw
+        isrTimeChange = true;
+        updateScreen = true;
+        prepareClock();   
+        drawClockOnTFT(); // Redraw full ClockDisplay on Screen
 		// Light + Sound OR Light Only
 		if ((alm_towermode_actual == 1)||(alm_towermode_actual == 3)){
 			digitalWrite(LED_BTN_C, HIGH);			// Switch btn LEDs on
@@ -1191,6 +1201,18 @@ bool saveReturnToMainMenu()
         return true;   
     }
     return false;
+}
+
+void drawClockOnTFT()
+{
+    clearTFT();
+    updateScreen = false;
+    updateClockSign = true;
+    drawClockDisplayInfo();
+    currentMenuSetter = 0;
+    drawMenuSetter(1+4);
+    tft.fillRect(0,MENU_TOPLINE_Y+TFT_MARGIN_TOP,TFT_WIDTH,MENULINEWIDTH,COLOR_TXT);
+
 }
 
 void openSuBMenu()
@@ -1423,9 +1445,7 @@ bool exitWeddingMode()
         analogWrite(LED_MAIN, 0);
         isrTimeChange = true;
         updateScreen = true;
-        prepareClock();
-        
-        
+        prepareClock();    
     }
    return button_pressed;
 }
@@ -1718,14 +1738,6 @@ void clockDisplay(time_t t)
     }
 }
 
-void drawNotImplementedMessage(){
-    tft.setFont();
-    tft.setCursor(0, cursorYMenuStart);
-    tft.setTextSize(2);
-    tft.println("Hey Thomas, stellt sich raus du bist nicht einzige mit einem Deadline-Problem. Der Unterschied ist nur, wir koennen es nicht loesen! https://github.com/InfinityWave/LighthouseOS/ :-)");
-    set_default_font();
-}
-
 // read temperature from RTC:
 void update_temperature(){
     // Read temperature from RTC and update if necessary
@@ -1807,31 +1819,34 @@ bool checkAlarms () {
 bool checkAlarm (struct alarms &alm){
 	// Weekday:
 	// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
-	Serial.println(isrTime);
+	Serial.println("ChkAlm");
+    Serial.println(isrTime);
     Serial.println(alm.nextAlarm);
+    Serial.println(weekday(isrTime));
     if (alm.mode > 0 && alm.nextAlarm <= isrTime){ // Alarm is triggered
 		switch (alm.mode){
 			case 0: return false; break;				// Off: Not possible
 			case 1: alm.mode = 0; break; 				// Once: Switch off
-			case 2: alm.nextAlarm += 60*60*24; break;	// Every day: Add 24h
+			case 2: alm.nextAlarm += (time_t)86400; break;	// Every day: Add 24h
 			case 3: if (weekday(isrTime)<5) {			// Weekdays: So..Thr: Add 24h
-						alm.nextAlarm += 60*60*24;
+						alm.nextAlarm += (time_t)86400;
 					}else if (weekday(isrTime)==6) {		// Weekdays: Fr: Add 3 x 24h
-						alm.nextAlarm += 60*60*24*3;
-					}else if (weekday(isrTime)==7) {		// Weekdays: Fr: Add 2 x 24h
-						alm.nextAlarm += 60*60*24*2;
+						alm.nextAlarm += (time_t)86400*3;
+					}else if (weekday(isrTime)==7) {		// Weekdays: Sa: Add 2 x 24h
+						alm.nextAlarm += (time_t)86400*2;
 					}
 					break;
-			case 4: if (weekday(isrTime)==0) {				// Weekend: So: Add 6 x 24h
-						alm.nextAlarm += 60*60*24;
+			case 4: if (weekday(isrTime)==1) {				// Weekend: So: Add 6 x 24h
+						alm.nextAlarm += (time_t)86400*6;
 					}else if (weekday(isrTime)==7) {		// Weekend: Sa: Add 24h
-						alm.nextAlarm += 60*60*24;
+						alm.nextAlarm += (time_t)86400;
 					}
 					break;
 		}
 		alm_soundfile_actual = alm.soundfile;
 		alm_towermode_actual = alm.towermode;
-		return true;
+		Serial.println(alm.nextAlarm);
+        return true;
 	}
 	return false;
 }
@@ -1854,7 +1869,7 @@ void recalcAlarm(struct alarms &alm){
 		// Weekday:
 		// 1: Son, 2: Mon, 3: Tue, 4: Wed, 5: Thr, 6: Fr, 7: Sa
 		switch (weekday(isrTime)){ 			// Check today:
-			case 0: 						// Sunday
+			case 1: 						// Sunday
 				if (alm.mode==3){			// Next weekday is Monday => add 24h
 					alm.nextAlarm += (time_t)86400;
 				}else if (alm.mode==4){		// Weekend-alarm...
@@ -1863,7 +1878,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 1: 						// Monday
+			case 2: 						// Monday
 				if (alm.mode==3){			// Weekday-alarm
 					if (alm.nextAlarm <= isrTime){ // if in the past ... 
 						alm.nextAlarm += (time_t)86400; // Add 1 days
@@ -1874,7 +1889,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 2: 						// Tuesday
+			case 3: 						// Tuesday
 				if (alm.mode==3){			// Weekday-alarm
 					if (alm.nextAlarm <= isrTime){ // if in the past ... 
 						alm.nextAlarm += (time_t)86400; // Add 1 days
@@ -1885,7 +1900,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 3: 						// Wednesday
+			case 4: 						// Wednesday
 				if (alm.mode==3){			// Weekday-alarm
 					if (alm.nextAlarm <= isrTime){ // if in the past ... 
 						alm.nextAlarm += (time_t)86400; // Add 1 days
@@ -1896,7 +1911,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 4: 						// Thurday
+			case 5: 						// Thurday
 				if (alm.mode==3){			// Weekday-alarm
 					if (alm.nextAlarm <= isrTime){ // if in the past ... 
 						alm.nextAlarm += (time_t)86400; // Add 1 days
@@ -1907,7 +1922,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 5: 						// Friday
+			case 6: 						// Friday
 				if (alm.mode==3){			// Weekday-alarm
 					if (alm.nextAlarm <= isrTime){ // if in the past, next alarm is on Mo 
 						alm.nextAlarm += (time_t)86400 * 3; // Add 3 days
@@ -1918,7 +1933,7 @@ void recalcAlarm(struct alarms &alm){
 					}
 				}
 			break;
-			case 6: 						// Saturday
+			case 7: 						// Saturday
 				if (alm.mode==3){			// Next weekday is Monday => add 2 days
 					alm.nextAlarm += (time_t)86400 *2;
 				}else if (alm.mode==4){		// Weekend-alarm...
@@ -1929,7 +1944,7 @@ void recalcAlarm(struct alarms &alm){
 			break;
 		}
 	}
-    //Serial.println(alm.nextAlarm);
+    Serial.println(alm.nextAlarm);
     //Serial.println("Fin");
 }
 //FRAM functions
