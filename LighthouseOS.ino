@@ -135,7 +135,7 @@ Date "11.09.2021":
 #define DCF_INT 6     // interval of dcf sync in hours
 #define DCF_HOUR 0    // hour to start dcf sync
 #define DCF_MIN 0     // minute to start dcf sync
-#define DCF_LEN 3600*6    // length in seconds of dcf sync attempt
+#define DCF_LEN 3600    // length in seconds of dcf sync attempt
 
 #define STEP_RPM 1
 #define STEP_RPM_FAST 10
@@ -287,6 +287,11 @@ struct menuStruct {
 bool weddingModeFinished = false;
 
 void setup(void) {
+    // setup TFT Backlight as off
+    pinMode(TFT_LITE, OUTPUT);
+    //analogWrite(TFT_LITE, settingDisplayBrightness);
+    digitalWrite(TFT_LITE, false);
+
     Serial.begin(9600);
    
     //stepper setup
@@ -424,10 +429,6 @@ void setup(void) {
     }
     settingDCFEnabled = framread16bit(FRAM_DCF_ENABLE);
 
-    // setup TFT Backlight as off
-    pinMode(TFT_LITE, OUTPUT);
-    //analogWrite(TFT_LITE, settingDisplayBrightness);
-    digitalWrite(TFT_LITE, true);
 
     // setup tower LED
     pinMode(LED_MAIN, OUTPUT);
@@ -468,6 +469,7 @@ void setup(void) {
     DCFSyncChanged = true;
     dcfSyncStart = isrTime;
     clearTFT();
+    digitalWrite(TFT_LITE, true);
 }
 
 void loop()
@@ -500,7 +502,7 @@ void loop()
             //Serial.print(":");
             //Serial.println(minute(isrTime));
         }
-        if (dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
+        if (DCFSyncStatus && dcfSync && isrTime >= dcfSyncStart+DCF_LEN) {
             //DCF.Stop();
             //digitalWrite(DCF_EN_PIN, LOW);
             //dcfSync = false;
@@ -1313,13 +1315,17 @@ bool changeSubMenuSelection()
         updateMenuSelection = true;
         if (isrButtonL){
             isrButtonL = false;
+            //Serial.println("-");
             submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]-submenu.increment[submenu.selectedItem];
+            //Serial.println(submenu.item[submenu.selectedItem]);
             delay(REATTACH_DELAY);
             attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
         }
         else {
             isrButtonR = false;
+            //Serial.println("+");
             submenu.item[submenu.selectedItem] = submenu.item[submenu.selectedItem]+submenu.increment[submenu.selectedItem];
+            //Serial.println(submenu.item[submenu.selectedItem]);
             delay(REATTACH_DELAY);
             attachInterrupt(digitalPinToInterrupt(BTN_R), buttonR, FALLING);
         }
@@ -1411,7 +1417,7 @@ bool changeToWeddingMode()
         isrButtonL = false;    
         delay(REATTACH_DELAY);
         attachInterrupt(digitalPinToInterrupt(BTN_L), buttonL, FALLING);
-        Serial.println("Entering WeddingMode");
+        //Serial.println("Entering WeddingMode");
         //stepper.setRpm(STEP_RPM_FAST);
         //stepper.newMove(false, 36000);
         //Serial.println("Start Player");
@@ -1429,7 +1435,7 @@ bool exitWeddingMode()
 {
     bool button_pressed = anyButtonPressed();
     if(button_pressed){
-        Serial.println("Exit WeddingMode");
+        //Serial.println("Exit WeddingMode");
         //myDFPlayer.reset();
         //myDFPlayer.stop();
         //while (stepper.getStepsLeft()){
